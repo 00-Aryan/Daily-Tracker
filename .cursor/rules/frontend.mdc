@@ -1,0 +1,81 @@
+---
+description: Frontend React rules — applies when working in frontend/src directory
+globs: frontend/src/**/*.{js,jsx}
+alwaysApply: false
+---
+
+# Frontend Rules
+
+## Component Structure
+```jsx
+// Named default export, functional only
+export default function ComponentName({ prop1, prop2 }) {
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    apiFunction()
+      .then(res => setData(res.data))
+      .catch(err => setError(err.message))
+      .finally(() => setLoading(false))
+  }, [])
+
+  if (loading) return <div className="p-4 text-gray-500">Loading...</div>
+  if (error) return <div className="p-4 text-red-500">Error: {error}</div>
+
+  return <div>{/* content */}</div>
+}
+```
+
+## API Calls — Always Through services/api.js
+```javascript
+// Define in api.js
+export const getItems = () => api.get('/items')
+export const createItem = (data) => api.post('/items', data)
+export const updateItem = (id, data) => api.patch(`/items/${id}`, data)
+export const deleteItem = (id) => api.delete(`/items/${id}`)
+
+// Use in component — never use fetch() directly
+import { getItems } from '../services/api'
+```
+
+## Tailwind Design System
+```
+Sidebar bg: bg-gray-900
+Content bg: bg-gray-50  
+Cards: bg-white rounded-lg shadow-sm p-4
+Primary button: bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded
+Danger button: bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded
+Badge high priority: bg-red-100 text-red-700 text-xs px-2 py-0.5 rounded-full
+Badge low priority: bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-full
+```
+
+## Routing (React Router v6)
+```jsx
+import { Link, NavLink, useNavigate } from 'react-router-dom'
+
+// Active link styling
+<NavLink
+  to="/tasks"
+  className={({ isActive }) =>
+    isActive ? "bg-gray-700 text-white" : "text-gray-400 hover:text-white"
+  }
+>
+  Tasks
+</NavLink>
+```
+
+## Environment Variables
+```javascript
+const BASE_URL = import.meta.env.VITE_API_BASE_URL
+// Never hardcode http://localhost:8000
+```
+
+## Never
+- No class components
+- No inline styles
+- No external UI libraries (MUI, Chakra, Ant Design)
+- No direct fetch() — always use axios via api.js
+- No TypeScript — plain JS only
+- No prop-types — skip validation for now

@@ -1,0 +1,55 @@
+---
+description: Database schema rules — applies when working with models, schemas, or migrations
+globs: backend/app/{models,schemas}/**/*.py
+alwaysApply: false
+---
+
+# Database Rules
+
+## Tables Already Created In Supabase — Do Not Recreate
+user_profile, subjects, subtopics, platforms, projects,
+tasks, daily_logs, topic_levels, study_questions,
+study_attempts, job_applications
+
+## Key Relationships
+```
+subjects → subtopics (subject_id FK)
+tasks → projects, subjects, subtopics, platforms (all nullable FKs)
+topic_levels → subjects + subtopics (both required)
+study_questions → subjects + subtopics
+study_attempts → study_questions
+job_applications → standalone (no FK)
+daily_logs → unique on (user_id, log_date)
+```
+
+## UUID Fields
+All id fields are UUID. In Pydantic schemas use:
+```python
+from uuid import UUID
+id: UUID
+user_id: UUID
+```
+
+## Timestamps
+All created_at/updated_at are TIMESTAMP in DB.
+In Pydantic use: `from datetime import datetime` → `created_at: datetime`
+
+## Nullable Fields In Tasks
+subject_id, subtopic_id, platform_id, problem_name are nullable.
+Only populated when task_type = "study".
+In Pydantic: `Optional[UUID] = None`
+
+## Status Enums
+tasks.status: "today" | "done" | "backlog"
+tasks.task_type: "study" | "general"
+job_applications.status: "Applied" | "Screening" | "Interview" | "Offer" | "Rejected"
+study_questions.difficulty_level: "beginner" | "intermediate" | "advanced"
+
+## topic_levels Score Range
+numerical_score: FLOAT between 1.0 and 10.0
+streak: INTEGER (resets to 0 on wrong answer)
+
+## Never
+- Never CREATE TABLE — all tables exist
+- Never ALTER TABLE without explicit instruction
+- Never use ORM migrations — direct Supabase client only

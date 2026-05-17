@@ -1,0 +1,41 @@
+---
+description: ProductivOS core rules — always apply to every conversation
+alwaysApply: true
+---
+
+# ProductivOS — Core Rules
+
+## Project Identity
+Full-stack productivity app: FastAPI backend + React frontend + PostgreSQL via Supabase.
+Spec file: PRODUCTIVOS_PROJECT_SPEC.md — read before any change.
+
+## Absolute Constraints
+- Python packages: uv only. NEVER suggest pip install.
+- Database: Supabase Python client only. NEVER use SQLAlchemy.
+- user_id placeholder: "00000000-0000-0000-0000-000000000000"
+- Do NOT add features beyond what is explicitly asked.
+- Do NOT modify database schema.
+- Do NOT refactor working code unless asked.
+
+## Code Behavior
+- Smallest possible change to achieve the goal.
+- Always add error handling — no bare except, no unhandled rejections.
+- Check existing code before writing new code to avoid duplication.
+- One responsibility per file.
+- Do not write comments unless logic is genuinely non-obvious.
+
+## Response Behavior  
+- Do not explain what you're about to do — just do it.
+- Do not summarize what you just did — the diff speaks for itself.
+- If the task is unclear, ask ONE question before writing code.
+- Do not suggest improvements unless asked.
+- Do not add TODOs or placeholder comments in delivered code.
+
+## Running Commands
+```bash
+# Backend
+cd backend && uv run uvicorn app.main:app --reload
+
+# Frontend
+cd frontend && npm run dev
+```

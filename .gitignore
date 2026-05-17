@@ -1,1 +1,34 @@
 /PRODUCTIVOS_PROJECT_SPEC.md
+.env
+backend/.env
+frontend/.env
+/CODE_REVIEW.md
+/frontend-design.md
+
+# Environment files
+.env
+.env.*
+backend/.env
+frontend/.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+
+# Node
+node_modules/
+dist/
+.next/
+
+# uv
+.uv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

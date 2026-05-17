@@ -1,0 +1,78 @@
+---
+description: Backend FastAPI rules — applies when working in backend/ directory
+globs: backend/**/*.py
+alwaysApply: false
+---
+
+# Backend Rules
+
+## Package Management
+```bash
+uv add package-name     # add dependency
+uv run python script.py # run script
+uv run uvicorn app.main:app --reload  # run server
+```
+
+## Supabase Query Pattern
+```python
+from app.database import supabase
+
+# Always .execute() at the end
+result = supabase.table("table_name").select("*").eq("field", value).execute()
+data = result.data  # list of dicts
+
+# Insert
+result = supabase.table("table_name").insert({"field": value}).execute()
+
+# Update
+result = supabase.table("table_name").update({"field": value}).eq("id", id).execute()
+
+# Delete
+result = supabase.table("table_name").delete().eq("id", id).execute()
+```
+
+## Router Pattern
+```python
+from fastapi import APIRouter, HTTPException
+router = APIRouter()
+
+@router.get("/")
+async def list_items():
+    result = supabase.table("items").select("*").execute()
+    return result.data
+
+@router.post("/")
+async def create_item(payload: ItemCreate):
+    result = supabase.table("items").insert(payload.model_dump()).execute()
+    if not result.data:
+        raise HTTPException(status_code=400, detail="Creation failed")
+    return result.data[0]
+```
+
+## Schema Pattern
+```python
+from pydantic import BaseModel
+from typing import Optional
+from uuid import UUID
+from datetime import datetime, date
+
+class ItemCreate(BaseModel):
+    title: str
+    priority: int = 3
+
+class ItemResponse(ItemCreate):
+    id: UUID
+    created_at: datetime
+```
+
+## Register Router in main.py
+```python
+from app.routers import new_router
+app.include_router(new_router.router, prefix="/route", tags=["Tag"])
+```
+
+## Never
+- Never use SQLAlchemy or any ORM
+- Never use raw SQL with psycopg2
+- Never use pip — always uv
+- Never skip HTTPException on errors
