@@ -1,4 +1,4 @@
-import { Component } from 'react';
+import React, { Component } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import Navbar from './components/Navbar';
@@ -7,29 +7,40 @@ import DailyLog from './pages/DailyLog';
 import StudyQA from './pages/StudyQA';
 import JobTracker from './pages/JobTracker';
 
-class ErrorBoundary extends Component {
+class ErrorBoundary extends React.Component {
   constructor(props) {
-    super(props);
-    this.state = { hasError: false };
+    super(props)
+    this.state = { hasError: false, error: null }
   }
-
-  static getDerivedStateFromError() {
-    return { hasError: true };
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error }
   }
-
-  componentDidCatch(error, errorInfo) {
-    console.error(error, errorInfo);
+  componentDidCatch(error, info) {
+    console.error('ProductivOS error:', error, info)
   }
-
   render() {
     if (this.state.hasError) {
       return (
-        <p className="text-center text-stone-600 py-8">
-          Something went wrong. Refresh the page.
-        </p>
-      );
+        <div className="flex flex-col items-center justify-center
+                        min-h-screen bg-[#FAFAF5] text-center p-8">
+          <p className="text-5xl mb-4">⚠️</p>
+          <h2 className="text-lg font-semibold text-stone-700 mb-2">
+            Something went wrong
+          </h2>
+          <p className="text-sm text-stone-400 mb-6">
+            An unexpected error occurred.
+          </p>
+          <button
+            onClick={() => window.location.reload()}
+            className="text-sm bg-[#F97316] hover:bg-[#EA6C00]
+                       text-white px-4 py-2 rounded-lg
+                       transition-colors duration-150">
+            Refresh Page
+          </button>
+        </div>
+      )
     }
-    return this.props.children;
+    return this.props.children
   }
 }
 
@@ -41,11 +52,11 @@ function Layout() {
       </aside>
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <Navbar />
-        <main className="flex-1 overflow-y-auto p-6">
-          <ErrorBoundary>
+        <ErrorBoundary>
+          <main className="flex-1 overflow-y-auto p-6">
             <Outlet />
-          </ErrorBoundary>
-        </main>
+          </main>
+        </ErrorBoundary>
       </div>
     </div>
   );
@@ -61,15 +72,22 @@ function App() {
           <Route path="/daily-log" element={<DailyLog />} />
           <Route path="/study" element={<StudyQA />} />
           <Route path="/jobs" element={<JobTracker />} />
-          <Route
-            path="*"
-            element={
-              <div className="p-8 text-center">
-                <h2 className="text-xl font-semibold text-stone-700">Page not found</h2>
-                <p className="text-stone-400 mt-2">This page doesn't exist.</p>
-              </div>
-            }
-          />
+          <Route path="*" element={
+            <div className="flex flex-col items-center justify-center
+                            h-full py-24 text-center">
+              <p className="text-6xl mb-4">🧭</p>
+              <h2 className="text-lg font-semibold text-stone-700 mb-2">
+                Page not found
+              </h2>
+              <p className="text-sm text-stone-400 mb-6">
+                This page doesn't exist.
+              </p>
+              <a href="/tasks"
+                 className="text-sm text-[#F97316] hover:underline">
+                ← Back to Tasks
+              </a>
+            </div>
+          } />
         </Route>
       </Routes>
     </BrowserRouter>

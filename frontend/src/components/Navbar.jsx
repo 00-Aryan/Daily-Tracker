@@ -19,11 +19,11 @@ export default function Navbar() {
   });
 
   return (
-    <header className="h-14 shrink-0 bg-[var(--color-card)] border-b border-[var(--color-border)] flex items-center justify-between px-6">
-      <h2 className="font-display italic text-base font-semibold text-[var(--color-text-primary)] tracking-tight">
+    <header className="h-14 shrink-0 bg-white border-b border-[var(--color-border)] flex items-center justify-between gap-4 px-6">
+      <h2 className="font-display italic text-base font-semibold text-[var(--color-text-primary)] tracking-tight truncate">
         {title}
       </h2>
-      <time className="text-sm text-[var(--color-text-muted)] tabular-nums">
+      <time className="shrink-0 text-xs text-[var(--color-text-muted)] tabular-nums">
         {today}
       </time>
     </header>

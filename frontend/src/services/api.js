@@ -32,6 +32,18 @@ export const getPlatforms = () =>
 export const getProjects = () => 
   api.get('/reference/projects');
 
+export const createSubject = (data) =>
+  api.post('/reference/subjects', data);
+
+export const createSubtopic = (data) =>
+  api.post('/reference/subtopics', data);
+
+export const createPlatform = (data) =>
+  api.post('/reference/platforms', data);
+
+export const createProject = (data) =>
+  api.post('/reference/projects', data);
+
 // ==================== Daily Logs ====================
 
 export const getLog = (date) =>

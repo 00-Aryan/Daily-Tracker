@@ -1,4 +1,18 @@
-export default function TaskCard({ task, onDelete, onStatusChange, allowedMoves = {} }) {
+import { useDraggable } from '@dnd-kit/core';
+
+export default function TaskCard({
+  task,
+  onDelete,
+  onStatusChange,
+  allowedMoves = {},
+  isDraggable = true,
+  isDragOverlay = false,
+}) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: task.id,
+    disabled: !isDraggable || isDragOverlay,
+  });
+
   const priorityColors = {
     1: 'bg-red-100 text-red-800',
     2: 'bg-orange-100 text-orange-800',
@@ -23,20 +37,29 @@ export default function TaskCard({ task, onDelete, onStatusChange, allowedMoves 
   };
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-4 mb-3 shadow-sm hover:shadow-md transition-shadow">
-      {/* Header: Title + Delete Button */}
+    <div
+      ref={setNodeRef}
+      {...(isDraggable && !isDragOverlay ? listeners : {})}
+      {...(isDraggable && !isDragOverlay ? attributes : {})}
+      className={`bg-white border border-gray-200 rounded-lg p-4 mb-3 shadow-sm transition-shadow ${
+        isDraggable && !isDragOverlay ? 'cursor-grab' : ''
+      } ${isDragging ? 'opacity-50 cursor-grabbing' : 'hover:shadow-md'}`}
+    >
       <div className="flex justify-between items-start mb-2">
         <h3 className="font-semibold text-gray-800 flex-1 text-sm">{task.title}</h3>
-        <button
-          onClick={() => onDelete(task.id)}
-          className="text-gray-400 hover:text-red-600 transition-colors ml-2"
-          title="Delete task"
-        >
-          🗑
-        </button>
+        {onDelete && (
+          <button
+            type="button"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={() => onDelete(task.id)}
+            className="text-gray-400 hover:text-red-600 transition-colors ml-2"
+            title="Delete task"
+          >
+            🗑
+          </button>
+        )}
       </div>
 
-      {/* Priority & Task Type Badges */}
       <div className="flex gap-2 mb-3">
         <span className={`px-2 py-1 rounded text-xs font-medium ${priorityColors[task.priority] || priorityColors[5]}`}>
           {priorityLabels[task.priority] || 'P5'}
@@ -50,7 +73,6 @@ export default function TaskCard({ task, onDelete, onStatusChange, allowedMoves 
         </span>
       </div>
 
-      {/* Study Task Details */}
       {task.task_type === 'study' && (
         <div className="mb-3 text-xs text-gray-600 bg-gray-50 p-2 rounded">
           {task.subject_name && task.subtopic_name && (
@@ -63,22 +85,21 @@ export default function TaskCard({ task, onDelete, onStatusChange, allowedMoves 
         </div>
       )}
 
-      {/* Deadline */}
       {task.deadline && (
         <p className="text-xs text-blue-600 mb-3">{formatDeadline(task.deadline)}</p>
       )}
 
-      {/* Project */}
       {task.project_name && (
         <p className="text-xs text-gray-500 mb-3">📁 {task.project_name}</p>
       )}
 
-      {/* Move Buttons */}
-      {Object.keys(allowedMoves).length > 0 && (
+      {Object.keys(allowedMoves).length > 0 && onStatusChange && (
         <div className="flex gap-2">
           {Object.entries(allowedMoves).map(([columnName, status]) => (
             <button
               key={columnName}
+              type="button"
+              onPointerDown={(e) => e.stopPropagation()}
               onClick={() => onStatusChange(task.id, status)}
               className="flex-1 px-2 py-1 text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 rounded transition-colors"
             >

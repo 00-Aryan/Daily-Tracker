@@ -24,15 +24,15 @@ export default function Sidebar() {
             className={({ isActive }) =>
               `relative flex items-center gap-3 px-4 py-2.5 mx-2 rounded-lg text-sm transition-all duration-150 ${
                 isActive
-                  ? 'bg-[var(--color-sidebar-hover)] text-[var(--color-text-inverse)]'
-                  : 'text-[var(--color-text-sidebar)] hover:text-[var(--color-text-inverse)] hover:bg-[var(--color-sidebar-hover)]/60'
+                  ? 'bg-[#1E293B] text-white'
+                  : 'text-[#94A3B8] hover:text-white hover:bg-[#1E293B]/60'
               }`
             }
           >
             {({ isActive }) => (
               <>
                 {isActive && (
-                  <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-[var(--color-accent)] rounded-full" />
+                  <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-[#F97316] rounded-full" />
                 )}
                 <span>{item.icon}</span>
                 <span>{item.label}</span>

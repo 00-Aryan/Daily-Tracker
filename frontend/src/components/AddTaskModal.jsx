@@ -1,5 +1,16 @@
 import { useState, useEffect } from 'react';
-import { getProjects, getSubjects, getSubtopics, getPlatforms, createTask } from '../services/api';
+import ComboboxCreatable from './ComboboxCreatable';
+import {
+  getProjects,
+  getSubjects,
+  getSubtopics,
+  getPlatforms,
+  createTask,
+  createSubject,
+  createSubtopic,
+  createPlatform,
+  createProject,
+} from '../services/api';
 
 export default function AddTaskModal({ isOpen, onClose, onTaskAdded }) {
   const [formData, setFormData] = useState({
@@ -81,6 +92,41 @@ export default function AddTaskModal({ isOpen, onClose, onTaskAdded }) {
       console.error('Failed to load subtopics', err);
       setSubtopics([]);
     }
+  };
+
+  const handleCreateSubject = async (name) => {
+    const res = await createSubject({ name });
+    const subjectsRes = await getSubjects();
+    setSubjects(subjectsRes.data || []);
+    setFormData((prev) => ({
+      ...prev,
+      subject_id: res.data.id,
+      subtopic_id: '',
+    }));
+  };
+
+  const handleCreateSubtopic = async (name) => {
+    const res = await createSubtopic({
+      subject_id: formData.subject_id,
+      name,
+    });
+    const subtopicsRes = await getSubtopics(formData.subject_id);
+    setSubtopics(subtopicsRes.data || []);
+    setFormData((prev) => ({ ...prev, subtopic_id: res.data.id }));
+  };
+
+  const handleCreatePlatform = async (name) => {
+    const res = await createPlatform({ name });
+    const platformsRes = await getPlatforms();
+    setPlatforms(platformsRes.data || []);
+    setFormData((prev) => ({ ...prev, platform_id: res.data.id }));
+  };
+
+  const handleCreateProject = async (name) => {
+    const res = await createProject({ name });
+    const projectsRes = await getProjects();
+    setProjects(projectsRes.data || []);
+    setFormData((prev) => ({ ...prev, project_id: res.data.id }));
   };
 
   const handleChange = (e) => {
@@ -241,17 +287,14 @@ export default function AddTaskModal({ isOpen, onClose, onTaskAdded }) {
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Project
             </label>
-            <select
-              name="project_id"
-              value={formData.project_id}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">Select project...</option>
-              {projects.map(p => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
+            <ComboboxCreatable
+              items={projects}
+              value={formData.project_id || null}
+              onChange={(id) => setFormData((prev) => ({ ...prev, project_id: id || '' }))}
+              onCreateNew={handleCreateProject}
+              placeholder="Select or create project..."
+              loading={loading}
+            />
           </div>
 
           {/* Study Task Fields */}
@@ -262,17 +305,20 @@ export default function AddTaskModal({ isOpen, onClose, onTaskAdded }) {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Subject *
                 </label>
-                <select
-                  name="subject_id"
-                  value={formData.subject_id}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Select subject...</option>
-                  {subjects.map(s => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))}
-                </select>
+                <ComboboxCreatable
+                  items={subjects}
+                  value={formData.subject_id || null}
+                  onChange={(id) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      subject_id: id || '',
+                      subtopic_id: '',
+                    }))
+                  }
+                  onCreateNew={handleCreateSubject}
+                  placeholder="Select or create subject..."
+                  loading={loading}
+                />
               </div>
 
               {/* Subtopic */}
@@ -280,18 +326,19 @@ export default function AddTaskModal({ isOpen, onClose, onTaskAdded }) {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Subtopic
                 </label>
-                <select
-                  name="subtopic_id"
-                  value={formData.subtopic_id}
-                  onChange={handleChange}
+                <ComboboxCreatable
+                  items={subtopics}
+                  value={formData.subtopic_id || null}
+                  onChange={(id) =>
+                    setFormData((prev) => ({ ...prev, subtopic_id: id || '' }))
+                  }
+                  onCreateNew={handleCreateSubtopic}
+                  placeholder={
+                    formData.subject_id ? 'Select or create subtopic...' : 'Select subject first'
+                  }
                   disabled={!formData.subject_id}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 disabled:text-gray-500"
-                >
-                  <option value="">Select subtopic...</option>
-                  {subtopics.map(st => (
-                    <option key={st.id} value={st.id}>{st.name}</option>
-                  ))}
-                </select>
+                  loading={loading}
+                />
               </div>
 
               {/* Platform */}
@@ -299,17 +346,16 @@ export default function AddTaskModal({ isOpen, onClose, onTaskAdded }) {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Platform
                 </label>
-                <select
-                  name="platform_id"
-                  value={formData.platform_id}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Select platform...</option>
-                  {platforms.map(p => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
+                <ComboboxCreatable
+                  items={platforms}
+                  value={formData.platform_id || null}
+                  onChange={(id) =>
+                    setFormData((prev) => ({ ...prev, platform_id: id || '' }))
+                  }
+                  onCreateNew={handleCreatePlatform}
+                  placeholder="Select or create platform..."
+                  loading={loading}
+                />
               </div>
 
               {/* Problem Name */}

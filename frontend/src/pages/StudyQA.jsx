@@ -1,5 +1,12 @@
 import { useState, useEffect } from 'react';
-import { getStudyProfile, getSubjects, getSubtopics } from '../services/api';
+import ComboboxCreatable from '../components/ComboboxCreatable';
+import {
+  getStudyProfile,
+  getSubjects,
+  getSubtopics,
+  createSubject,
+  createSubtopic,
+} from '../services/api';
 import OnboardingFlow from '../components/study/OnboardingFlow';
 import QuestionSession from '../components/study/QuestionSession';
 import ProgressDashboard from '../components/study/ProgressDashboard';
@@ -51,6 +58,21 @@ export default function StudyQA() {
     setRefreshKey(prev => prev + 1);
   };
 
+  const handleCreateSubject = async (name) => {
+    const res = await createSubject({ name });
+    const subjectsRes = await getSubjects();
+    setSubjects(subjectsRes.data || []);
+    setSelectedSubject(res.data.id);
+    setSelectedSubtopic('');
+  };
+
+  const handleCreateSubtopic = async (name) => {
+    const res = await createSubtopic({ subject_id: selectedSubject, name });
+    const subtopicsRes = await getSubtopics(selectedSubject);
+    setSubtopics(subtopicsRes.data || []);
+    setSelectedSubtopic(res.data.id);
+  };
+
   return (
     <div>
       <DueTodayPanel onStartReview={() => setSessionActive(true)} />
@@ -72,26 +94,29 @@ export default function StudyQA() {
               <div className="grid grid-cols-2 gap-4 mb-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Subject</label>
-                  <select
-                    value={selectedSubject}
-                    onChange={(e) => { setSelectedSubject(e.target.value); setSelectedSubtopic(''); }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#F97316]"
-                  >
-                    <option value="">Select subject...</option>
-                    {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                  </select>
+                  <ComboboxCreatable
+                    items={subjects}
+                    value={selectedSubject || null}
+                    onChange={(id) => {
+                      setSelectedSubject(id || '');
+                      setSelectedSubtopic('');
+                    }}
+                    onCreateNew={handleCreateSubject}
+                    placeholder="Select or create subject..."
+                  />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Subtopic</label>
-                  <select
-                    value={selectedSubtopic}
-                    onChange={(e) => setSelectedSubtopic(e.target.value)}
+                  <ComboboxCreatable
+                    items={subtopics}
+                    value={selectedSubtopic || null}
+                    onChange={(id) => setSelectedSubtopic(id || '')}
+                    onCreateNew={handleCreateSubtopic}
+                    placeholder={
+                      selectedSubject ? 'Select or create subtopic...' : 'Select subject first'
+                    }
                     disabled={!selectedSubject}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#F97316] disabled:bg-gray-50"
-                  >
-                    <option value="">Select subtopic...</option>
-                    {subtopics.map(st => <option key={st.id} value={st.id}>{st.name}</option>)}
-                  </select>
+                  />
                 </div>
               </div>
               <button

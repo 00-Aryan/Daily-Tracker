@@ -1,3 +1,4 @@
+import json
 from datetime import date, datetime, timedelta
 from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query
@@ -104,6 +105,7 @@ async def generate_study_questions(
             "subtopic_id": str(subtopic_id),
             "question_text": q["question"],
             "difficulty_level": q.get("difficulty", "intermediate"),
+            "expected_concepts": json.dumps(q.get("expected_concepts", [])),
             "generated_by": "gemini",
             "created_at": now,
         }
@@ -136,11 +138,31 @@ async def submit_attempt(attempt: AttemptCreate):
         raise HTTPException(status_code=404, detail="Question not found")
     question = q_row.data[0]
 
-    # Evaluate via Gemini
+    expected_concepts = []
+    raw_ec = question.get("expected_concepts")
+    if raw_ec:
+        if isinstance(raw_ec, list):
+            expected_concepts = raw_ec
+        elif isinstance(raw_ec, str):
+            try:
+                expected_concepts = json.loads(raw_ec)
+            except (json.JSONDecodeError, ValueError):
+                expected_concepts = []
+
+    subject_row = supabase.table("subjects").select("name")\
+        .eq("id", question["subject_id"]).execute()
+    subtopic_row = supabase.table("subtopics").select("name")\
+        .eq("id", question["subtopic_id"]).execute()
+    subject_name = subject_row.data[0]["name"] if subject_row.data else ""
+    subtopic_name = subtopic_row.data[0]["name"] if subtopic_row.data else ""
+
     evaluation = evaluate_answer(
         question=question["question_text"],
-        expected_concepts=[],  # not stored in DB, passed at generation time
+        expected_concepts=expected_concepts,
         user_answer=attempt.user_answer,
+        subject=subject_name,
+        subtopic=subtopic_name,
+        difficulty=question.get("difficulty_level", "intermediate"),
     )
 
     raw_score = evaluation.get("raw_score", 0.0)

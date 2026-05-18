@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { getSubjects, createStudyProfile } from '../../services/api';
+import ComboboxCreatable from '../ComboboxCreatable';
+import { getSubjects, createStudyProfile, createSubject } from '../../services/api';
 
 export default function OnboardingFlow({ onComplete }) {
   const [step, setStep] = useState(1);
@@ -15,9 +16,23 @@ export default function OnboardingFlow({ onComplete }) {
     getSubjects().then(res => setSubjects(res.data || [])).catch(() => {});
   }, []);
 
-  const toggleSubject = (id) => {
-    setSelectedSubjects(prev =>
-      prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]
+  const selectedSubjectItems = selectedSubjects
+    .map((id) => subjects.find((s) => s.id === id))
+    .filter(Boolean)
+    .map((s) => ({ id: s.id, name: s.name }));
+
+  const handleSubjectsChange = (selected) => {
+    setSelectedSubjects(selected.map((s) => s.id));
+  };
+
+  const handleCreateSubject = async (name) => {
+    const res = await createSubject({ name });
+    const subjectsRes = await getSubjects();
+    const updated = subjectsRes.data || [];
+    setSubjects(updated);
+    const created = updated.find((s) => s.id === res.data.id) || res.data;
+    setSelectedSubjects((prev) =>
+      prev.includes(created.id) ? prev : [...prev, created.id]
     );
   };
 
@@ -58,26 +73,14 @@ export default function OnboardingFlow({ onComplete }) {
       {step === 1 && (
         <div>
           <h2 className="font-semibold mb-3">What subjects are you studying?</h2>
-          {subjects.length === 0 ? (
-            <p className="text-sm text-gray-500">No subjects found. Create subjects in the Tasks module first.</p>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {subjects.map(s => (
-                <button
-                  key={s.id}
-                  type="button"
-                  onClick={() => toggleSubject(s.id)}
-                  className={`px-3 py-1.5 rounded-md text-sm transition-colors ${
-                    selectedSubjects.includes(s.id)
-                      ? 'bg-[#F97316] text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  {s.name}
-                </button>
-              ))}
-            </div>
-          )}
+          <ComboboxCreatable
+            multiSelect
+            items={subjects}
+            value={selectedSubjectItems}
+            onChange={handleSubjectsChange}
+            onCreateNew={handleCreateSubject}
+            placeholder="Search or create subjects..."
+          />
           <button
             type="button"
             onClick={() => setStep(2)}
