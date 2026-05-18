@@ -1,0 +1,84 @@
+.
+├── backend
+│   ├── app
+│   │   ├── database.py
+│   │   ├── __init__.py
+│   │   ├── main.py
+│   │   ├── models
+│   │   │   └── __init__.py
+│   │   ├── routers
+│   │   │   ├── __init__.py
+│   │   │   ├── jobs.py
+│   │   │   ├── logs.py
+│   │   │   ├── reference.py
+│   │   │   ├── study.py
+│   │   │   └── tasks.py
+│   │   ├── schemas
+│   │   │   ├── __init__.py
+│   │   │   ├── job.py
+│   │   │   ├── log.py
+│   │   │   ├── reference.py
+│   │   │   ├── study.py
+│   │   │   └── task.py
+│   │   └── services
+│   │       ├── gemini_service.py
+│   │       ├── __init__.py
+│   │       └── sm2_algorithm.py
+│   ├── create_tables.sql
+│   ├── GEMINI.md
+│   ├── main.py
+│   ├── pyproject.toml
+│   ├── README.md
+│   ├── test_gemini.py
+│   └── uv.lock
+├── CODE_REVIEW.md
+├── docs
+│   └── reviews
+│       ├── CODE_REVIEW_BACKEND.md
+│       ├── CODE_REVIEW_FRONTEND.md
+│       ├── CODE_REVIEW_INTEGRATION.md
+│       ├── CODE_REVIEW_MASTER.md
+│       ├── CODE_REVIEW_SECURITY.md
+│       └── REVIEW_GUIDELINES.md
+├── frontend
+│   ├── eslint.config.js
+│   ├── GEMINI.md
+│   ├── index.html
+│   ├── package.json
+│   ├── package-lock.json
+│   ├── public
+│   │   ├── favicon.svg
+│   │   └── icons.svg
+│   ├── README.md
+│   ├── src
+│   │   ├── App.jsx
+│   │   ├── components
+│   │   │   ├── AddJobModal.jsx
+│   │   │   ├── AddTaskModal.jsx
+│   │   │   ├── ComboboxCreatable.jsx
+│   │   │   ├── JobCard.jsx
+│   │   │   ├── KanbanColumn.jsx
+│   │   │   ├── LogEditor.jsx
+│   │   │   ├── LogJournal.jsx
+│   │   │   ├── Navbar.jsx
+│   │   │   ├── Sidebar.jsx
+│   │   │   ├── study
+│   │   │   └── TaskCard.jsx
+│   │   ├── index.css
+│   │   ├── main.jsx
+│   │   ├── pages
+│   │   │   ├── DailyLog.jsx
+│   │   │   ├── JobTracker.jsx
+│   │   │   ├── StudyQA.jsx
+│   │   │   └── Tasks.jsx
+│   │   ├── services
+│   │   │   └── api.js
+│   │   └── store
+│   │       └── useAppStore.js
+│   └── vite.config.js
+├── frontend-design.md
+├── PRODUCTIVOS_PROJECT_SPEC.md
+├── PROJECT_STRUCTURE.txt
+└── README.md
+
+17 directories, 65 files

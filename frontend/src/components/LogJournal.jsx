@@ -71,7 +71,13 @@ export default function LogJournal({ searchQuery, onDateSelect }) {
     try {
       const res = await getLogs(nextPage, 10);
       const data = res.data || [];
-      setLogs((prev) => [...prev, ...data]);
+      setLogs((prev) => {
+        const combined = [...prev, ...data];
+        const unique = [
+          ...new Map(combined.map((l) => [l.id, l])).values(),
+        ];
+        return unique;
+      });
       setPage(nextPage);
       setHasMore(data.length === 10);
     } catch (err) {
@@ -87,7 +93,7 @@ export default function LogJournal({ searchQuery, onDateSelect }) {
   }
 
   return (
-    <div>
+    <div className="flex flex-col h-full">
       {error && (
         <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-md text-sm">{error}</div>
       )}
@@ -95,7 +101,7 @@ export default function LogJournal({ searchQuery, onDateSelect }) {
       {logs.length === 0 ? (
         <p className="text-center text-gray-500 py-8">No logs yet</p>
       ) : (
-        <div className="space-y-3 max-h-[calc(100vh-220px)] overflow-y-auto pr-1">
+        <div className="space-y-3 flex-1 overflow-y-auto pr-1">
           {logs.map((log) => (
             <div
               key={log.id}
