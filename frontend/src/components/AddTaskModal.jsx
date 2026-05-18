@@ -30,6 +30,7 @@ export default function AddTaskModal({ isOpen, onClose, onTaskAdded }) {
   const [subtopics, setSubtopics] = useState([]);
   const [platforms, setPlatforms] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [refLoading, setRefLoading] = useState(false);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -65,6 +66,7 @@ export default function AddTaskModal({ isOpen, onClose, onTaskAdded }) {
   }, [formData.subject_id]);
 
   const loadReferenceData = async () => {
+    setRefLoading(true);
     setLoading(true);
     setError('');
     try {
@@ -80,6 +82,7 @@ export default function AddTaskModal({ isOpen, onClose, onTaskAdded }) {
       setError('Failed to load reference data');
       console.error(err);
     } finally {
+      setRefLoading(false);
       setLoading(false);
     }
   };
@@ -386,7 +389,18 @@ export default function AddTaskModal({ isOpen, onClose, onTaskAdded }) {
             </button>
             <button
               type="submit"
-              disabled={submitting || loading}
+              disabled={submitting || loading || refLoading}
+              className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-colors disabled:bg-gray-400"
+            >
+              {submitting ? 'Adding...' : 'Add Task'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+ed={submitting || loading}
               className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-colors disabled:bg-gray-400"
             >
               {submitting ? 'Adding...' : 'Add Task'}

@@ -150,7 +150,9 @@ export default function Tasks() {
       Done: 'done',
       Backlog: 'backlog',
     },
-    Done: {},
+    Done: {
+      Today: 'today',
+    },
     Backlog: {
       Today: 'today',
     },

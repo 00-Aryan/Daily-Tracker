@@ -32,7 +32,7 @@ export default function KanbanColumn({
   return (
     <div
       ref={setNodeRef}
-      className={`flex-1 border rounded-lg p-4 min-h-screen transition-colors duration-150 ${
+      className={`flex-1 border rounded-lg p-4 min-h-[400px] transition-colors duration-150 ${
         isOver
           ? 'border-[#F97316] bg-[#FFF7ED]'
           : `${bgColor} ${borderColor}`

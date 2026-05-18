@@ -31,7 +31,7 @@ export default function TaskCard({
 
   const formatDeadline = (date) => {
     if (!date) return null;
-    const d = new Date(date);
+    const d = new Date(date + 'T12:00:00');
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     return `Due: ${d.getDate()} ${months[d.getMonth()]}`;
   };
