@@ -199,40 +199,76 @@ export default function DailyLog() {
             </button>
           </div>
 
-          <div className="mb-6 bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
-            <h3 className="text-sm font-semibold text-gray-800 mb-3">Today&apos;s Tasks</h3>
-            {tasksLoading ? (
-              <p className="text-sm text-gray-500">Loading tasks...</p>
-            ) : tasksError ? (
-              <p className="text-sm text-red-600">{tasksError}</p>
-            ) : todayTasks.length === 0 ? (
-              <p className="text-sm text-gray-500">No tasks for today</p>
-            ) : (
-              <ul className="space-y-1">
-                {todayTasks.map((task) => (
-                  <li key={task.id} className="text-sm text-gray-700 flex items-center gap-2">
-                    <span className={task.status === 'done' ? 'text-green-600' : 'text-gray-300'}>
-                      {task.status === 'done' ? '✓' : '○'}
-                    </span>
-                    <span className={task.status === 'done' ? 'line-through text-gray-400' : ''}>
-                      {task.title}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Left: Tasks panel */}
+            <div>
+              {selectedDate === todayStr ? (
+                <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm h-fit">
+                  <h3 className="text-sm font-semibold text-gray-800 mb-3">Today&apos;s Tasks</h3>
+                  {tasksLoading ? (
+                    <p className="text-sm text-gray-500">Loading tasks...</p>
+                  ) : tasksError ? (
+                    <p className="text-sm text-red-600">{tasksError}</p>
+                  ) : (
+                    <div className="space-y-4">
+                      {/* Active tasks */}
+                      <div>
+                        {todayTasks.length === 0 ? (
+                          <p className="text-sm text-gray-500">No active tasks</p>
+                        ) : (
+                          <ul className="space-y-1">
+                            {todayTasks.map((task) => (
+                              <li key={task.id} className="text-sm text-gray-700 flex items-center gap-2">
+                                <span className="text-gray-300">○</span>
+                                <span>{task.title}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
 
-          {loading ? (
-            <div className="text-center text-gray-500 py-8">Loading log...</div>
-          ) : (
-            <LogEditor
-              date={selectedDate}
-              existingLog={currentLog}
-              onSaved={handleLogSaved}
-              onDirtyChange={setLogDirty}
-            />
-          )}
+                      {/* Completed tasks */}
+                      <div>
+                        <h4 className="text-xs font-semibold text-stone-400 uppercase tracking-wider mb-2">Completed</h4>
+                        {doneTasks.length === 0 ? (
+                          <p className="text-sm text-gray-400">None</p>
+                        ) : (
+                          <ul className="space-y-1">
+                            {doneTasks.map((task) => (
+                              <li key={task.id} className="text-sm text-stone-400 flex items-center gap-2">
+                                <span>✓</span>
+                                <span className="line-through">{task.title}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="bg-white rounded-xl border border-[#E7E5E4] p-4 text-center">
+                  <p className="text-xs text-stone-400">
+                    Task history not available for past dates
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Right: Log editor */}
+            <div>
+              {loading ? (
+                <div className="text-center text-gray-500 py-8">Loading log...</div>
+              ) : (
+                <LogEditor
+                  date={selectedDate}
+                  existingLog={currentLog}
+                  onSaved={handleLogSaved}
+                  onDirtyChange={setLogDirty}
+                />
+              )}
+            </div>
+          </div>
         </div>
       )}
 
