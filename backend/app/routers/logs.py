@@ -9,6 +9,8 @@ from app.schemas.log import LogCreate, LogUpdate, LogResponse
 
 router = APIRouter()
 
+USER_ID = "00000000-0000-0000-0000-000000000000"
+
 
 def _row_to_log(row: dict) -> LogResponse:
     return LogResponse(
@@ -28,15 +30,25 @@ async def get_logs(
     limit: int = Query(10, ge=1, le=100, description="Items per page"),
 ):
     offset = (page - 1) * limit
-    result = supabase.table("daily_logs").select("*").order("log_date", desc=True).range(offset, offset + limit - 1).execute()
+    result = supabase.table("daily_logs")\
+        .select("*")\
+        .eq("user_id", USER_ID)\
+        .order("log_date", desc=True)\
+        .range(offset, offset + limit - 1)\
+        .execute()
     return [_row_to_log(r) for r in result.data]
 
 @router.get("/search", response_model=List[LogResponse])
 async def search_logs(q: str = Query(..., description="Search query")):
     search_pattern = f"%{q}%"
-    result = supabase.table("daily_logs").select("*").or_(
-        f"what_i_did.ilike.{search_pattern},blockers.ilike.{search_pattern},tomorrow_intention.ilike.{search_pattern}"
-    ).order("log_date", desc=True).execute()
+    result = supabase.table("daily_logs")\
+        .select("*")\
+        .eq("user_id", USER_ID)\
+        .or_(
+            f"what_i_did.ilike.{search_pattern},blockers.ilike.{search_pattern},tomorrow_intention.ilike.{search_pattern}"
+        )\
+        .order("log_date", desc=True)\
+        .execute()
     return [_row_to_log(r) for r in result.data]
 
 @router.get("/{log_date}", response_model=LogResponse)
@@ -46,7 +58,11 @@ async def get_log_by_date(log_date: str):
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
 
-    result = supabase.table("daily_logs").select("*").eq("log_date", str(parsed_date)).execute()
+    result = supabase.table("daily_logs")\
+        .select("*")\
+        .eq("log_date", str(parsed_date))\
+        .eq("user_id", USER_ID)\
+        .execute()
     if not result.data:
         raise HTTPException(status_code=404, detail="Log not found for this date")
     return _row_to_log(result.data[0])
@@ -54,12 +70,18 @@ async def get_log_by_date(log_date: str):
 
 @router.post("", response_model=LogResponse, status_code=201)
 async def create_log(log: LogCreate):
-    existing = supabase.table("daily_logs").select("id").eq("log_date", str(log.log_date)).execute()
+    # Belt-and-suspenders check alongside DB UNIQUE constraint
+    existing = supabase.table("daily_logs")\
+        .select("id")\
+        .eq("log_date", str(log.log_date))\
+        .eq("user_id", USER_ID)\
+        .execute()
     if existing.data:
         raise HTTPException(status_code=409, detail="Log for this date already exists")
 
     now = datetime.now()
     data = {
+        "user_id": USER_ID,
         "log_date": str(log.log_date),
         "what_i_did": log.what_i_did,
         "blockers": log.blockers,
@@ -85,24 +107,33 @@ async def update_log(log_date: str, log_update: LogUpdate):
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
 
-    existing = supabase.table("daily_logs").select("*").eq("log_date", str(parsed_date)).execute()
-    if not existing.data:
-        raise HTTPException(status_code=404, detail="Log not found for this date")
-
-    update_data = {"updated_at": datetime.now().isoformat()}
-
-    if log_update.what_i_did is not None:
-        update_data["what_i_did"] = log_update.what_i_did
-    if log_update.blockers is not None:
-        update_data["blockers"] = log_update.blockers
-    if log_update.tomorrow_intention is not None:
-        update_data["tomorrow_intention"] = log_update.tomorrow_intention
+    update_data = {
+        "what_i_did": log_update.what_i_did,
+        "blockers": log_update.blockers,
+        "tomorrow_intention": log_update.tomorrow_intention,
+    }
+    
+    update_data = {k: v for k, v in update_data.items() if v is not None}
+    update_data["updated_at"] = datetime.now().isoformat()
+    
+    if len(update_data) == 1:
+        existing = supabase.table("daily_logs")\
+            .select("*")\
+            .eq("log_date", str(parsed_date))\
+            .eq("user_id", USER_ID).execute()
+        if not existing.data:
+            raise HTTPException(status_code=404, detail="Log not found")
+        return _row_to_log(existing.data[0])
 
     try:
-        result = supabase.table("daily_logs").update(update_data).eq("log_date", str(parsed_date)).execute()
+        result = supabase.table("daily_logs")\
+            .update(update_data)\
+            .eq("log_date", str(parsed_date))\
+            .eq("user_id", USER_ID)\
+            .execute()
+        if not result.data:
+             raise HTTPException(status_code=404, detail="Log not found")
     except APIError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
     return _row_to_log(result.data[0])
-
-
