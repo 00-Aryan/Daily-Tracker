@@ -9,7 +9,7 @@ from app.schemas.task import TaskCreate, TaskUpdate, TaskResponse
 
 router = APIRouter()
 
-DUMMY_USER_ID = "00000000-0000-0000-0000-000000000000"
+USER_ID = "00000000-0000-0000-0000-000000000000"
 
 
 def _row_to_response(row: dict) -> TaskResponse:
@@ -39,7 +39,7 @@ def _row_to_response(row: dict) -> TaskResponse:
 async def get_tasks(status: Optional[str] = Query(None, description="Filter by status: today, done, or backlog")):
     # Select task fields plus related table names
     query_str = "*, projects(name), subjects(name), subtopics(name), platforms(name)"
-    query = supabase.table("tasks").select(query_str)
+    query = supabase.table("tasks").select(query_str).eq("user_id", USER_ID)
 
     if status:
         if status not in ["today", "done", "backlog"]:
@@ -58,6 +58,7 @@ async def get_tasks(status: Optional[str] = Query(None, description="Filter by s
 async def create_task(task: TaskCreate):
     now = datetime.now()
     data = {
+        "user_id": USER_ID,
         "title": task.title,
         "task_type": task.task_type,
         "priority": task.priority,
@@ -81,7 +82,7 @@ async def create_task(task: TaskCreate):
 
 @router.patch("/{task_id}", response_model=TaskResponse)
 async def update_task(task_id: UUID, task_update: TaskUpdate):
-    existing = supabase.table("tasks").select("*").eq("id", str(task_id)).execute()
+    existing = supabase.table("tasks").select("*").eq("id", str(task_id)).eq("user_id", USER_ID).execute()
     if not existing.data:
         raise HTTPException(status_code=404, detail="Task not found")
 
@@ -121,42 +122,38 @@ async def update_task(task_id: UUID, task_update: TaskUpdate):
         raise HTTPException(status_code=400, detail="No fields to update")
 
     try:
-        supabase.table("tasks").update(update_data).eq("id", str(task_id)).execute()
+        supabase.table("tasks").update(update_data).eq("id", str(task_id)).eq("user_id", USER_ID).execute()
     except APIError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
     # Re-fetch with joins to include related names in response
     query_str = "*, projects(name), subjects(name), subtopics(name), platforms(name)"
-    result = supabase.table("tasks").select(query_str).eq("id", str(task_id)).execute()
+    result = supabase.table("tasks").select(query_str).eq("id", str(task_id)).eq("user_id", USER_ID).execute()
     return _row_to_response(result.data[0])
 
 
 @router.delete("/{task_id}")
 async def delete_task(task_id: UUID):
     try:
-        result = supabase.table("tasks").delete().eq("id", str(task_id)).execute()
+        supabase.table("tasks").delete().eq("id", str(task_id)).eq("user_id", USER_ID).execute()
     except APIError as e:
         raise HTTPException(status_code=400, detail=str(e))
-
-    if result.data == []:
-        raise HTTPException(status_code=404, detail="Task not found")
 
     return {"message": "Task deleted"}
 
 
 @router.post("/run-backlog-check")
 async def run_backlog_check():
-    result = supabase.table("tasks").select("id").eq("status", "today").execute()
-
-    count = len(result.data)
-    if count > 0:
-        now = datetime.now().isoformat()
-        try:
-            supabase.table("tasks").update({
+    try:
+        result = supabase.table("tasks")\
+            .update({
                 "status": "backlog",
-                "moved_to_backlog_at": now
-            }).eq("status", "today").execute()
-        except APIError as e:
-            raise HTTPException(status_code=400, detail=str(e))
+                "moved_to_backlog_at": datetime.now().isoformat()
+            })\
+            .eq("status", "today")\
+            .eq("user_id", USER_ID)\
+            .execute()
+    except APIError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
-    return {"moved": count}
+    return {"moved": len(result.data)}
