@@ -1,18 +1,57 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { getDueToday } from '../../services/api';
+import { isAbortError } from '../../services/asyncUtils';
 
 export default function DueTodayPanel({ onStartReview }) {
   const [dueQuestions, setDueQuestions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  useEffect(() => {
-    getDueToday()
-      .then(res => setDueQuestions(res.data || []))
-      .catch(() => {})
-      .finally(() => setLoading(false));
+  const loadDue = useCallback(async (signal) => {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await getDueToday({ signal });
+      if (signal?.aborted) return;
+      setDueQuestions(res.data || []);
+    } catch (err) {
+      if (isAbortError(err)) return;
+      setError('Failed to load due questions');
+      setDueQuestions([]);
+      console.error(err);
+    } finally {
+      if (!signal?.aborted) {
+        setLoading(false);
+      }
+    }
   }, []);
 
+  useEffect(() => {
+    const controller = new AbortController();
+    loadDue(controller.signal);
+    return () => controller.abort();
+  }, [loadDue]);
+
   if (loading) return null;
+
+  if (error) {
+    return (
+      <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-6">
+        <p className="text-sm text-red-700 mb-2">{error}</p>
+        <button
+          type="button"
+          onClick={() => {
+            const controller = new AbortController();
+            loadDue(controller.signal);
+          }}
+          className="px-3 py-1 text-xs bg-[#F97316] text-white rounded-md"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
   if (dueQuestions.length === 0) return null;
 
   return (
@@ -30,8 +69,8 @@ export default function DueTodayPanel({ onStartReview }) {
         </button>
       </div>
       <ul className="space-y-1">
-        {dueQuestions.slice(0, 3).map((q, i) => (
-          <li key={i} className="text-xs text-gray-600 truncate">
+        {dueQuestions.slice(0, 3).map((q) => (
+          <li key={q.id || q.question_id} className="text-xs text-gray-600 truncate">
             • {q.question_text}
           </li>
         ))}

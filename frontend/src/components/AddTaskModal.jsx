@@ -1,18 +1,23 @@
 import { useState, useEffect } from 'react';
 import ComboboxCreatable from './ComboboxCreatable';
 import {
-  getProjects,
-  getSubjects,
   getSubtopics,
-  getPlatforms,
   createTask,
   createSubject,
   createSubtopic,
   createPlatform,
   createProject,
 } from '../services/api';
+import useAppStore from '../store/useAppStore';
 
 export default function AddTaskModal({ isOpen, onClose, onTaskAdded }) {
+  const referenceData = useAppStore((state) => state.referenceData);
+  const fetchReferenceData = useAppStore((state) => state.fetchReferenceData);
+  const refLoading = useAppStore((state) => state.refLoading);
+  const addProject = useAppStore((state) => state.addProject);
+  const addSubject = useAppStore((state) => state.addSubject);
+  const addPlatform = useAppStore((state) => state.addPlatform);
+
   const [formData, setFormData] = useState({
     title: '',
     task_type: 'general',
@@ -25,111 +30,106 @@ export default function AddTaskModal({ isOpen, onClose, onTaskAdded }) {
     problem_name: '',
   });
 
-  const [projects, setProjects] = useState([]);
-  const [subjects, setSubjects] = useState([]);
   const [subtopics, setSubtopics] = useState([]);
-  const [platforms, setPlatforms] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [refLoading, setRefLoading] = useState(false);
+  const [loadingSubtopics, setLoadingSubtopics] = useState(false);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  // Fetch reference data on mount
   useEffect(() => {
     if (isOpen) {
-      loadReferenceData();
-    } else {
-      // Reset form when modal closes (cancel or after submit)
-      setFormData({
-        title: '',
-        task_type: 'general',
-        priority: 3,
-        deadline: '',
-        project_id: '',
-        subject_id: '',
-        subtopic_id: '',
-        platform_id: '',
-        problem_name: '',
-      });
-      setError('');
+      const controller = new AbortController();
+      fetchReferenceData({ signal: controller.signal });
+      return () => controller.abort();
     }
-  }, [isOpen]);
 
-  // Load subtopics when subject changes
+    setFormData({
+      title: '',
+      task_type: 'general',
+      priority: 3,
+      deadline: '',
+      project_id: '',
+      subject_id: '',
+      subtopic_id: '',
+      platform_id: '',
+      problem_name: '',
+    });
+    setError('');
+  }, [isOpen, fetchReferenceData]);
+
   useEffect(() => {
-    if (formData.subject_id) {
-      loadSubtopics(formData.subject_id);
-    } else {
+    if (!formData.subject_id) {
       setSubtopics([]);
-      setFormData(prev => ({ ...prev, subtopic_id: '' }));
+      setFormData((prev) => ({ ...prev, subtopic_id: '' }));
+      return;
     }
+
+    const controller = new AbortController();
+    loadSubtopics(formData.subject_id, controller.signal);
+    return () => controller.abort();
   }, [formData.subject_id]);
 
-  const loadReferenceData = async () => {
-    setRefLoading(true);
-    setLoading(true);
-    setError('');
+  const loadSubtopics = async (subjectId, signal) => {
+    setLoadingSubtopics(true);
     try {
-      const [projectsRes, subjectsRes, platformsRes] = await Promise.all([
-        getProjects(),
-        getSubjects(),
-        getPlatforms(),
-      ]);
-      setProjects(projectsRes.data || []);
-      setSubjects(subjectsRes.data || []);
-      setPlatforms(platformsRes.data || []);
-    } catch (err) {
-      setError('Failed to load reference data');
-      console.error(err);
-    } finally {
-      setRefLoading(false);
-      setLoading(false);
-    }
-  };
-
-  const loadSubtopics = async (subjectId) => {
-    try {
-      const res = await getSubtopics(subjectId);
+      const res = await getSubtopics(subjectId, { signal });
+      if (signal?.aborted) return;
       setSubtopics(res.data || []);
     } catch (err) {
+      if (err.name === 'CanceledError' || err.name === 'AbortError') return;
       console.error('Failed to load subtopics', err);
       setSubtopics([]);
+    } finally {
+      if (!signal?.aborted) {
+        setLoadingSubtopics(false);
+      }
     }
   };
 
   const handleCreateSubject = async (name) => {
-    const res = await createSubject({ name });
-    const subjectsRes = await getSubjects();
-    setSubjects(subjectsRes.data || []);
-    setFormData((prev) => ({
-      ...prev,
-      subject_id: res.data.id,
-      subtopic_id: '',
-    }));
+    try {
+      const res = await createSubject({ name });
+      addSubject(res.data);
+      setFormData((prev) => ({
+        ...prev,
+        subject_id: res.data.id,
+        subtopic_id: '',
+      }));
+    } catch (err) {
+      setError('Failed to create subject');
+    }
   };
 
   const handleCreateSubtopic = async (name) => {
-    const res = await createSubtopic({
-      subject_id: formData.subject_id,
-      name,
-    });
-    const subtopicsRes = await getSubtopics(formData.subject_id);
-    setSubtopics(subtopicsRes.data || []);
-    setFormData((prev) => ({ ...prev, subtopic_id: res.data.id }));
+    try {
+      const res = await createSubtopic({
+        subject_id: formData.subject_id,
+        name,
+      });
+      setSubtopics(prev => [...prev, res.data]);
+      setFormData((prev) => ({ ...prev, subtopic_id: res.data.id }));
+    } catch (err) {
+      setError('Failed to create subtopic');
+    }
   };
 
   const handleCreatePlatform = async (name) => {
-    const res = await createPlatform({ name });
-    const platformsRes = await getPlatforms();
-    setPlatforms(platformsRes.data || []);
-    setFormData((prev) => ({ ...prev, platform_id: res.data.id }));
+    try {
+      const res = await createPlatform({ name });
+      addPlatform(res.data);
+      setFormData((prev) => ({ ...prev, platform_id: res.data.id }));
+    } catch (err) {
+      setError('Failed to create platform');
+    }
   };
 
   const handleCreateProject = async (name) => {
-    const res = await createProject({ name });
-    const projectsRes = await getProjects();
-    setProjects(projectsRes.data || []);
-    setFormData((prev) => ({ ...prev, project_id: res.data.id }));
+    try {
+      const res = await createProject({ name });
+      addProject(res.data);
+      setFormData((prev) => ({ ...prev, project_id: res.data.id }));
+    } catch (err) {
+      setError('Failed to create project');
+    }
   };
 
   const handleChange = (e) => {
@@ -291,12 +291,12 @@ export default function AddTaskModal({ isOpen, onClose, onTaskAdded }) {
               Project
             </label>
             <ComboboxCreatable
-              items={projects}
+              items={referenceData.projects}
               value={formData.project_id || null}
               onChange={(id) => setFormData((prev) => ({ ...prev, project_id: id || '' }))}
               onCreateNew={handleCreateProject}
               placeholder="Select or create project..."
-              loading={loading}
+              loading={refLoading}
             />
           </div>
 
@@ -309,7 +309,7 @@ export default function AddTaskModal({ isOpen, onClose, onTaskAdded }) {
                   Subject *
                 </label>
                 <ComboboxCreatable
-                  items={subjects}
+                  items={referenceData.subjects}
                   value={formData.subject_id || null}
                   onChange={(id) =>
                     setFormData((prev) => ({
@@ -320,7 +320,7 @@ export default function AddTaskModal({ isOpen, onClose, onTaskAdded }) {
                   }
                   onCreateNew={handleCreateSubject}
                   placeholder="Select or create subject..."
-                  loading={loading}
+                  loading={refLoading}
                 />
               </div>
 
@@ -340,7 +340,7 @@ export default function AddTaskModal({ isOpen, onClose, onTaskAdded }) {
                     formData.subject_id ? 'Select or create subtopic...' : 'Select subject first'
                   }
                   disabled={!formData.subject_id}
-                  loading={loading}
+                  loading={loadingSubtopics}
                 />
               </div>
 
@@ -350,14 +350,14 @@ export default function AddTaskModal({ isOpen, onClose, onTaskAdded }) {
                   Platform
                 </label>
                 <ComboboxCreatable
-                  items={platforms}
+                  items={referenceData.platforms}
                   value={formData.platform_id || null}
                   onChange={(id) =>
                     setFormData((prev) => ({ ...prev, platform_id: id || '' }))
                   }
                   onCreateNew={handleCreatePlatform}
                   placeholder="Select or create platform..."
-                  loading={loading}
+                  loading={refLoading}
                 />
               </div>
 
@@ -389,18 +389,7 @@ export default function AddTaskModal({ isOpen, onClose, onTaskAdded }) {
             </button>
             <button
               type="submit"
-              disabled={submitting || loading || refLoading}
-              className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-colors disabled:bg-gray-400"
-            >
-              {submitting ? 'Adding...' : 'Add Task'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-ed={submitting || loading}
+              disabled={submitting || refLoading || loadingSubtopics}
               className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-colors disabled:bg-gray-400"
             >
               {submitting ? 'Adding...' : 'Add Task'}

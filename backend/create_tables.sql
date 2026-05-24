@@ -9,6 +9,7 @@ CREATE TABLE user_profile (
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );
+CREATE INDEX IF NOT EXISTS idx_user_profile_user_id ON user_profile(user_id);
 
 -- 3. SUBJECTS
 CREATE TABLE subjects (
@@ -17,13 +18,16 @@ CREATE TABLE subjects (
   name TEXT NOT NULL,
   created_at TIMESTAMP DEFAULT NOW()
 );
+CREATE INDEX IF NOT EXISTS idx_subjects_user_id ON subjects(user_id);
 
 -- 4. SUBTOPICS
 CREATE TABLE subtopics (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
   subject_id UUID REFERENCES subjects(id) ON DELETE CASCADE,
   name TEXT NOT NULL
 );
+CREATE INDEX IF NOT EXISTS idx_subtopics_user_id ON subtopics(user_id);
 
 -- 5. PLATFORMS
 CREATE TABLE platforms (
@@ -31,6 +35,7 @@ CREATE TABLE platforms (
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
   name TEXT NOT NULL
 );
+CREATE INDEX IF NOT EXISTS idx_platforms_user_id ON platforms(user_id);
 
 -- 6. PROJECTS
 CREATE TABLE projects (
@@ -40,6 +45,7 @@ CREATE TABLE projects (
   description TEXT,
   created_at TIMESTAMP DEFAULT NOW()
 );
+CREATE INDEX IF NOT EXISTS idx_projects_user_id ON projects(user_id);
 
 -- 7. TASKS
 CREATE TABLE tasks (
@@ -59,6 +65,7 @@ CREATE TABLE tasks (
   completed_at TIMESTAMP,
   moved_to_backlog_at TIMESTAMP
 );
+CREATE INDEX IF NOT EXISTS idx_tasks_user_id ON tasks(user_id);
 
 -- 8. DAILY LOGS
 CREATE TABLE daily_logs (
@@ -72,6 +79,7 @@ CREATE TABLE daily_logs (
   updated_at TIMESTAMP DEFAULT NOW(),
   UNIQUE(user_id, log_date)
 );
+CREATE INDEX IF NOT EXISTS idx_daily_logs_user_id ON daily_logs(user_id);
 
 -- 9. TOPIC LEVELS
 CREATE TABLE topic_levels (
@@ -86,6 +94,7 @@ CREATE TABLE topic_levels (
   last_attempted TIMESTAMP,
   updated_at TIMESTAMP DEFAULT NOW()
 );
+CREATE INDEX IF NOT EXISTS idx_topic_levels_user_id ON topic_levels(user_id);
 
 -- 10. STUDY QUESTIONS
 CREATE TABLE study_questions (
@@ -95,9 +104,11 @@ CREATE TABLE study_questions (
   subtopic_id UUID REFERENCES subtopics(id) ON DELETE CASCADE,
   question_text TEXT NOT NULL,
   difficulty_level TEXT CHECK (difficulty_level IN ('beginner', 'intermediate', 'advanced')),
+  expected_concepts JSONB DEFAULT '[]',
   generated_by TEXT DEFAULT 'gemini',
   created_at TIMESTAMP DEFAULT NOW()
 );
+CREATE INDEX IF NOT EXISTS idx_study_questions_user_id ON study_questions(user_id);
 
 -- 11. STUDY ATTEMPTS
 CREATE TABLE study_attempts (
@@ -112,6 +123,7 @@ CREATE TABLE study_attempts (
   scheduled_for DATE,
   attempt_date TIMESTAMP DEFAULT NOW()
 );
+CREATE INDEX IF NOT EXISTS idx_study_attempts_user_id ON study_attempts(user_id);
 
 -- 12. JOB APPLICATIONS
 CREATE TABLE job_applications (
@@ -129,3 +141,4 @@ CREATE TABLE job_applications (
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );
+CREATE INDEX IF NOT EXISTS idx_job_applications_user_id ON job_applications(user_id);

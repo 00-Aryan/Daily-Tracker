@@ -1,4 +1,5 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 const navItems = [
   { path: '/tasks', label: 'Tasks', icon: '📋' },
@@ -8,6 +9,18 @@ const navItems = [
 ];
 
 export default function Sidebar() {
+  const { signOut, user } = useAuth();
+  const navigate = useNavigate();
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      navigate('/login');
+    } catch (err) {
+      console.error('Sign out error:', err);
+    }
+  };
+
   return (
     <div className="h-full flex flex-col bg-[var(--color-sidebar)]">
       <div className="px-5 py-6">
@@ -41,7 +54,28 @@ export default function Sidebar() {
           </NavLink>
         ))}
       </nav>
-      <p className="px-5 py-4 text-xs text-[#334155] mt-auto">v0.1</p>
+      
+      {user && (
+        <div className="px-4 py-4 mt-auto border-t border-[var(--color-sidebar-hover)]">
+          <div className="flex flex-col gap-2">
+            <p className="px-2 text-[10px] uppercase font-bold text-[#475569] tracking-widest">
+              Account
+            </p>
+            <button
+              onClick={handleSignOut}
+              className="flex items-center gap-3 px-4 py-2 rounded-lg text-sm text-[#94A3B8] 
+                         hover:text-white hover:bg-[#1E293B]/60 transition-all duration-150"
+            >
+              <span>Logout</span>
+              <span className="text-[10px] ml-auto opacity-50">{user.email?.split('@')[0]}</span>
+            </button>
+          </div>
+        </div>
+      )}
+      
+      {!user && (
+        <p className="px-5 py-4 text-xs text-[#334155] mt-auto">v0.1</p>
+      )}
     </div>
   );
 }

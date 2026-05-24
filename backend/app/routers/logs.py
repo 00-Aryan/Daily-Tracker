@@ -1,15 +1,14 @@
 from datetime import date, datetime
 from uuid import UUID
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from typing import Optional, List
 from postgrest.exceptions import APIError
+from supabase import Client
 
-from app.database import supabase
 from app.schemas.log import LogCreate, LogUpdate, LogResponse
+from app.dependencies import get_current_user, get_db
 
 router = APIRouter()
-
-USER_ID = "00000000-0000-0000-0000-000000000000"
 
 
 def _row_to_log(row: dict) -> LogResponse:
@@ -28,22 +27,28 @@ def _row_to_log(row: dict) -> LogResponse:
 async def get_logs(
     page: int = Query(1, ge=1, description="Page number"),
     limit: int = Query(10, ge=1, le=100, description="Items per page"),
+    current_user: str = Depends(get_current_user),
+    db: Client = Depends(get_db),
 ):
     offset = (page - 1) * limit
-    result = supabase.table("daily_logs")\
+    result = db.table("daily_logs")\
         .select("*")\
-        .eq("user_id", USER_ID)\
+        .eq("user_id", current_user)\
         .order("log_date", desc=True)\
         .range(offset, offset + limit - 1)\
         .execute()
     return [_row_to_log(r) for r in result.data]
 
 @router.get("/search", response_model=List[LogResponse])
-async def search_logs(q: str = Query(..., description="Search query")):
+async def search_logs(
+    q: str = Query(..., description="Search query"),
+    current_user: str = Depends(get_current_user),
+    db: Client = Depends(get_db),
+):
     search_pattern = f"%{q}%"
-    result = supabase.table("daily_logs")\
+    result = db.table("daily_logs")\
         .select("*")\
-        .eq("user_id", USER_ID)\
+        .eq("user_id", current_user)\
         .or_(
             f"what_i_did.ilike.{search_pattern},blockers.ilike.{search_pattern},tomorrow_intention.ilike.{search_pattern}"
         )\
@@ -52,16 +57,16 @@ async def search_logs(q: str = Query(..., description="Search query")):
     return [_row_to_log(r) for r in result.data]
 
 @router.get("/{log_date}", response_model=LogResponse)
-async def get_log_by_date(log_date: str):
+async def get_log_by_date(log_date: str, current_user: str = Depends(get_current_user), db: Client = Depends(get_db)):
     try:
         parsed_date = date.fromisoformat(log_date)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
 
-    result = supabase.table("daily_logs")\
+    result = db.table("daily_logs")\
         .select("*")\
         .eq("log_date", str(parsed_date))\
-        .eq("user_id", USER_ID)\
+        .eq("user_id", current_user)\
         .execute()
     if not result.data:
         raise HTTPException(status_code=404, detail="Log not found for this date")
@@ -69,19 +74,19 @@ async def get_log_by_date(log_date: str):
 
 
 @router.post("", response_model=LogResponse, status_code=201)
-async def create_log(log: LogCreate):
+async def create_log(log: LogCreate, current_user: str = Depends(get_current_user), db: Client = Depends(get_db)):
     # Belt-and-suspenders check alongside DB UNIQUE constraint
-    existing = supabase.table("daily_logs")\
+    existing = db.table("daily_logs")\
         .select("id")\
         .eq("log_date", str(log.log_date))\
-        .eq("user_id", USER_ID)\
+        .eq("user_id", current_user)\
         .execute()
     if existing.data:
         raise HTTPException(status_code=409, detail="Log for this date already exists")
 
     now = datetime.now()
     data = {
-        "user_id": USER_ID,
+        "user_id": current_user,
         "log_date": str(log.log_date),
         "what_i_did": log.what_i_did,
         "blockers": log.blockers,
@@ -91,7 +96,7 @@ async def create_log(log: LogCreate):
     }
 
     try:
-        result = supabase.table("daily_logs").insert(data).execute()
+        result = db.table("daily_logs").insert(data).execute()
     except APIError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -101,7 +106,12 @@ async def create_log(log: LogCreate):
 
 
 @router.patch("/{log_date}", response_model=LogResponse)
-async def update_log(log_date: str, log_update: LogUpdate):
+async def update_log(
+    log_date: str, 
+    log_update: LogUpdate, 
+    current_user: str = Depends(get_current_user),
+    db: Client = Depends(get_db),
+):
     try:
         parsed_date = date.fromisoformat(log_date)
     except ValueError:
@@ -117,19 +127,19 @@ async def update_log(log_date: str, log_update: LogUpdate):
     update_data["updated_at"] = datetime.now().isoformat()
     
     if len(update_data) == 1:
-        existing = supabase.table("daily_logs")\
+        existing = db.table("daily_logs")\
             .select("*")\
             .eq("log_date", str(parsed_date))\
-            .eq("user_id", USER_ID).execute()
+            .eq("user_id", current_user).execute()
         if not existing.data:
             raise HTTPException(status_code=404, detail="Log not found")
         return _row_to_log(existing.data[0])
 
     try:
-        result = supabase.table("daily_logs")\
+        result = db.table("daily_logs")\
             .update(update_data)\
             .eq("log_date", str(parsed_date))\
-            .eq("user_id", USER_ID)\
+            .eq("user_id", current_user)\
             .execute()
         if not result.data:
              raise HTTPException(status_code=404, detail="Log not found")
@@ -137,3 +147,4 @@ async def update_log(log_date: str, log_update: LogUpdate):
         raise HTTPException(status_code=400, detail=str(e))
 
     return _row_to_log(result.data[0])
+

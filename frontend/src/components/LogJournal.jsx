@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { getLogs, searchLogs } from '../services/api';
+import { isAbortError } from '../services/asyncUtils';
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const MONTHS = [
@@ -35,31 +36,41 @@ export default function LogJournal({ searchQuery, onDateSelect }) {
   }, [searchQuery]);
 
   useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
+
     const fetchLogs = async () => {
       setLoading(true);
       setError('');
       try {
         if (isSearch) {
-          const res = await searchLogs(searchQuery.trim());
+          const res = await searchLogs(searchQuery.trim(), { signal: controller.signal });
+          if (!active) return;
           const data = res.data || [];
           setLogs(data);
           setHasMore(false);
         } else {
-          const res = await getLogs(1, 10);
+          const res = await getLogs(1, 10, { signal: controller.signal });
+          if (!active) return;
           const data = res.data || [];
           setLogs(data);
           setHasMore(data.length === 10);
           setPage(1);
         }
       } catch (err) {
+        if (!active || isAbortError(err)) return;
         setError('Failed to load logs');
         console.error(err);
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     };
 
     fetchLogs();
+    return () => {
+      active = false;
+      controller.abort();
+    };
   }, [searchQuery, isSearch]);
 
   const handleLoadMore = async () => {

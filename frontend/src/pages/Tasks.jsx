@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   DndContext,
   DragOverlay,
@@ -9,7 +9,8 @@ import {
 import KanbanColumn from '../components/KanbanColumn';
 import AddTaskModal from '../components/AddTaskModal';
 import TaskCard from '../components/TaskCard';
-import { getTasks, updateTask, deleteTask } from '../services/api';
+import { deleteTask } from '../services/api';
+import useAppStore from '../store/useAppStore';
 
 const DRAG_MOVES = {
   today: ['done', 'backlog'],
@@ -26,48 +27,32 @@ function findTaskLocation(tasks, taskId) {
 }
 
 export default function Tasks() {
-  const [tasks, setTasks] = useState({
-    today: [],
-    done: [],
-    backlog: [],
-  });
+  const tasks = useAppStore((state) => state.tasks);
+  const fetchTasks = useAppStore((state) => state.fetchTasks);
+  const setTasks = useAppStore((state) => state.setTasks);
+  const loading = useAppStore((state) => state.tasksLoading);
+  const error = useAppStore((state) => state.tasksError);
+  const updateTaskStatus = useAppStore((state) => state.updateTaskStatus);
+
   const [showModal, setShowModal] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
   const [activeTask, setActiveTask] = useState(null);
+  const [localError, setLocalError] = useState('');
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 8 },
-    })
+    }),
   );
 
+  const loadAllTasks = useCallback(async (signal) => {
+    await fetchTasks(null, { signal });
+  }, [fetchTasks]);
+
   useEffect(() => {
-    loadAllTasks();
-  }, []);
-
-  const loadAllTasks = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const [todayRes, doneRes, backlogRes] = await Promise.all([
-        getTasks('today'),
-        getTasks('done'),
-        getTasks('backlog'),
-      ]);
-
-      setTasks({
-        today: todayRes.data || [],
-        done: doneRes.data || [],
-        backlog: backlogRes.data || [],
-      });
-    } catch (err) {
-      setError('Failed to load tasks');
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
+    const controller = new AbortController();
+    loadAllTasks(controller.signal);
+    return () => controller.abort();
+  }, [loadAllTasks]);
 
   const handleDragStart = (event) => {
     const located = findTaskLocation(tasks, event.active.id);
@@ -89,29 +74,10 @@ export default function Tasks() {
     if (sourceStatus === targetStatus) return;
     if (!DRAG_MOVES[sourceStatus]?.includes(targetStatus)) return;
 
-    const snapshot = {
-      today: [...tasks.today],
-      done: [...tasks.done],
-      backlog: [...tasks.backlog],
-    };
-
-    setTasks((prev) => {
-      const moving = prev[sourceStatus].find((t) => String(t.id) === String(taskId));
-      if (!moving) return prev;
-      return {
-        ...prev,
-        [sourceStatus]: prev[sourceStatus].filter((t) => String(t.id) !== String(taskId)),
-        [targetStatus]: [...prev[targetStatus], { ...moving, status: targetStatus }],
-      };
-    });
-
     try {
-      await updateTask(taskId, { status: targetStatus });
-      await loadAllTasks();
+      await updateTaskStatus(taskId, targetStatus);
     } catch (err) {
-      setTasks(snapshot);
-      setError('Failed to update task');
-      console.error(err);
+      setLocalError('Failed to update task');
     }
   };
 
@@ -121,11 +87,9 @@ export default function Tasks() {
 
   const handleStatusChange = async (taskId, newStatus) => {
     try {
-      await updateTask(taskId, { status: newStatus });
-      await loadAllTasks();
+      await updateTaskStatus(taskId, newStatus);
     } catch (err) {
-      setError('Failed to update task');
-      console.error(err);
+      setLocalError('Failed to update task');
     }
   };
 
@@ -134,15 +98,15 @@ export default function Tasks() {
 
     try {
       await deleteTask(taskId);
-      await loadAllTasks();
+      await fetchTasks(null, { force: true });
     } catch (err) {
-      setError('Failed to delete task');
+      setLocalError('Failed to delete task');
       console.error(err);
     }
   };
 
   const handleTaskAdded = async () => {
-    await loadAllTasks();
+    await fetchTasks(null, { force: true });
   };
 
   const allowedMoves = {
@@ -158,7 +122,9 @@ export default function Tasks() {
     },
   };
 
-  if (loading && Object.values(tasks).every(arr => arr.length === 0)) {
+  const displayError = localError || error;
+
+  if (loading && Object.values(tasks).every((arr) => arr.length === 0)) {
     return (
       <div className="p-6">
         <h1 className="text-3xl font-bold mb-6">Tasks</h1>
@@ -179,9 +145,9 @@ export default function Tasks() {
         </button>
       </div>
 
-      {error && (
+      {displayError && (
         <div className="mb-4 p-4 bg-red-50 text-red-700 rounded-md">
-          {error}
+          {displayError}
         </div>
       )}
 

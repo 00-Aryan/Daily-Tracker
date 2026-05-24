@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { generateQuestions, submitAttempt } from '../../services/api';
+import { isAbortError } from '../../services/asyncUtils';
 
 export default function QuestionSession({ subjectId, subtopicId, onSessionComplete }) {
   const [questions, setQuestions] = useState([]);
@@ -9,20 +10,49 @@ export default function QuestionSession({ subjectId, subtopicId, onSessionComple
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState('');
+  const [loadError, setLoadError] = useState('');
+  const [submitError, setSubmitError] = useState('');
   const [sessionDone, setSessionDone] = useState(false);
 
-  useEffect(() => {
+  const loadQuestions = useCallback(async (signal) => {
+    if (!subjectId || !subtopicId) {
+      setLoading(false);
+      setQuestions([]);
+      return;
+    }
+
     setLoading(true);
-    generateQuestions(subjectId, subtopicId)
-      .then(res => setQuestions(res.data || []))
-      .catch(() => setError('Failed to generate questions'))
-      .finally(() => setLoading(false));
+    setLoadError('');
+    try {
+      const res = await generateQuestions(subjectId, subtopicId, { signal });
+      if (signal?.aborted) return;
+      setQuestions(res.data || []);
+    } catch (err) {
+      if (isAbortError(err)) return;
+      setLoadError('Failed to generate questions');
+      console.error(err);
+    } finally {
+      if (!signal?.aborted) {
+        setLoading(false);
+      }
+    }
   }, [subjectId, subtopicId]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    loadQuestions(controller.signal);
+    return () => controller.abort();
+  }, [loadQuestions]);
+
+  const handleRetryLoad = () => {
+    const controller = new AbortController();
+    loadQuestions(controller.signal);
+  };
 
   const handleSubmit = async () => {
     if (!answer.trim()) return;
     setSubmitting(true);
+    setSubmitError('');
     setFeedback(null);
     try {
       const res = await submitAttempt({
@@ -31,31 +61,66 @@ export default function QuestionSession({ subjectId, subtopicId, onSessionComple
       });
       const fb = res.data;
       setFeedback(fb);
-      setResults(prev => [...prev, { question: questions[currentIdx].question_text, ...fb }]);
-    } catch {
-      setError('Failed to submit answer');
+      setResults((prev) => [
+        ...prev,
+        { question: questions[currentIdx].question_text, ...fb },
+      ]);
+    } catch (err) {
+      if (isAbortError(err)) return;
+      setSubmitError('Failed to submit answer. Please try again.');
+      console.error(err);
     } finally {
       setSubmitting(false);
     }
   };
 
   const handleNext = () => {
+    setSubmitError('');
     if (currentIdx + 1 >= questions.length) {
       setSessionDone(true);
     } else {
-      setCurrentIdx(prev => prev + 1);
+      setCurrentIdx((prev) => prev + 1);
       setAnswer('');
       setFeedback(null);
     }
   };
 
-  if (loading) return <div className="text-center py-12 text-gray-500">Generating questions...</div>;
-  if (error) return <div className="p-4 bg-red-50 text-red-700 rounded">{error}</div>;
-  if (questions.length === 0) return <div className="text-center py-12 text-gray-500">No questions generated.</div>;
+  if (loading) {
+    return <div className="text-center py-12 text-gray-500">Generating questions...</div>;
+  }
+
+  if (loadError) {
+    return (
+      <div className="space-y-3 p-4 bg-red-50 text-red-700 rounded">
+        <p>{loadError}</p>
+        <button
+          type="button"
+          onClick={handleRetryLoad}
+          className="px-4 py-2 bg-[#F97316] text-white rounded-md text-sm"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  if (!subjectId || !subtopicId) {
+    return (
+      <div className="text-center py-12 text-gray-500">
+        Select a subject and subtopic to start a session.
+      </div>
+    );
+  }
+
+  if (questions.length === 0) {
+    return <div className="text-center py-12 text-gray-500">No questions generated.</div>;
+  }
 
   if (sessionDone) {
-    const totalScore = results.reduce((sum, r) => sum + r.score, 0) / results.length;
-    const correct = results.filter(r => r.is_correct).length;
+    const totalScore = results.length > 0
+      ? results.reduce((sum, r) => sum + r.score, 0) / results.length
+      : 0;
+    const correct = results.filter((r) => r.is_correct).length;
     return (
       <div className="space-y-4">
         <h2 className="text-xl font-bold">Session Complete</h2>
@@ -106,6 +171,19 @@ export default function QuestionSession({ subjectId, subtopicId, onSessionComple
             rows={4}
             className="w-full border border-gray-300 rounded-md p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#F97316]"
           />
+          {submitError && (
+            <div className="p-3 bg-red-50 text-red-700 rounded text-sm space-y-2">
+              <p>{submitError}</p>
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={submitting || !answer.trim()}
+                className="px-3 py-1 text-xs bg-[#F97316] text-white rounded-md disabled:opacity-40"
+              >
+                Retry
+              </button>
+            </div>
+          )}
           <button
             type="button"
             onClick={handleSubmit}
