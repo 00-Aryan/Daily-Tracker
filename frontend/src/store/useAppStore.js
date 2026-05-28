@@ -66,7 +66,7 @@ const useAppStore = create((set, get) => ({
   setTasks: (newTasks) => set({ tasks: newTasks }),
 
   updateTaskStatus: async (taskId, newStatus) => {
-    const { tasks, fetchTasks } = get();
+    const { tasks } = get();
     const snapshot = { ...tasks };
 
     // Find the task and its current status
@@ -94,9 +94,17 @@ const useAppStore = create((set, get) => ({
     set({ tasks: updatedTasks });
 
     try {
-      await updateTask(taskId, { status: newStatus });
-      // Background refetch to ensure server sync
-      await fetchTasks(null, { force: true });
+      const res = await updateTask(taskId, { status: newStatus });
+      // Reconcile optimistic state with server response
+      const updatedTask = res.data;
+      set((state) => ({
+        tasks: {
+          ...state.tasks,
+          [newStatus]: state.tasks[newStatus].map((t) =>
+            String(t.id) === String(taskId) ? updatedTask : t
+          ),
+        },
+      }));
     } catch (err) {
       console.error('Failed to update task status:', err);
       set({ tasks: snapshot, tasksError: 'Failed to sync task update' });
@@ -112,10 +120,14 @@ const useAppStore = create((set, get) => ({
   },
   refLoading: false,
   refError: null,
+  refLastFetched: null,
 
   fetchReferenceData: async (config = {}) => {
-    const { refLoading } = get();
+    const { refLoading, refLastFetched } = get();
     if (refLoading && !config.force) return;
+
+    // TTL: skip if fetched within 5 minutes unless forced
+    if (!config.force && refLastFetched && Date.now() - refLastFetched < 300_000) return;
 
     set({ refLoading: true, refError: null });
     try {
@@ -134,6 +146,7 @@ const useAppStore = create((set, get) => ({
           platforms: getSettledData(results[2], []),
         },
         refError: hasSettledFailure(results) ? 'Some reference data failed to load' : null,
+        refLastFetched: Date.now(),
       });
     } catch (err) {
       if (err.name === 'CanceledError' || err.name === 'AbortError') return;
@@ -164,6 +177,7 @@ const useAppStore = create((set, get) => ({
     referenceData: { projects: [], subjects: [], platforms: [] },
     refLoading: false,
     refError: null,
+    refLastFetched: null,
   }),
 }));
 

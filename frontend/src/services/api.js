@@ -1,16 +1,29 @@
 import axios from 'axios';
 import { supabase } from './supabaseClient';
+import { getCachedToken, setCachedToken } from './tokenCache';
+import { dedup } from './requestDedup';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000',
 });
 
-// Request interceptor for attaching auth token
+// Wrap default adapter with GET request deduplication
+const defaultAdapter = api.defaults.adapter;
+api.defaults.adapter = dedup(defaultAdapter);
+
+// Request interceptor for attaching auth token (cached)
 api.interceptors.request.use(async (config) => {
   if (supabase) {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.access_token) {
-      config.headers.Authorization = `Bearer ${session.access_token}`;
+    let token = getCachedToken();
+    if (!token) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        setCachedToken(session.access_token, session.expires_at);
+        token = session.access_token;
+      }
+    }
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
     }
   }
   return config;

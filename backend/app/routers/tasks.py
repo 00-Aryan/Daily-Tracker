@@ -37,6 +37,8 @@ def _row_to_response(row: dict) -> TaskResponse:
 @router.get("", response_model=List[TaskResponse])
 async def get_tasks(
     status: Optional[str] = Query(None, description="Filter by status: today, done, or backlog"),
+    page: Optional[int] = Query(None, ge=1, description="Page number (1-indexed)"),
+    limit: int = Query(50, ge=1, le=100, description="Items per page"),
     current_user: str = Depends(get_current_user),
     db: Client = Depends(get_db),
 ):
@@ -49,12 +51,19 @@ async def get_tasks(
             raise HTTPException(status_code=400, detail="Invalid status. Must be 'today', 'done', or 'backlog'")
         query = query.eq("status", status)
 
-    result = query.execute()
-
-    tasks = result.data
+    # DB-level sorting
     if status == "backlog":
-        tasks = sorted(tasks, key=lambda t: t.get("priority", 3))
-    return [_row_to_response(t) for t in tasks]
+        query = query.order("priority", desc=False)
+    else:
+        query = query.order("created_at", desc=True)
+
+    # Optional pagination
+    if page is not None:
+        offset = (page - 1) * limit
+        query = query.range(offset, offset + limit - 1)
+
+    result = query.execute()
+    return [_row_to_response(t) for t in result.data]
 
 
 @router.post("", response_model=TaskResponse, status_code=201)
