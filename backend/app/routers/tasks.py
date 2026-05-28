@@ -1,15 +1,14 @@
 from datetime import datetime
 from uuid import UUID
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from typing import Optional, List
 from postgrest.exceptions import APIError
+from supabase import Client
 
-from app.database import supabase
 from app.schemas.task import TaskCreate, TaskUpdate, TaskResponse
+from app.dependencies import get_current_user, get_db
 
 router = APIRouter()
-
-USER_ID = "00000000-0000-0000-0000-000000000000"
 
 
 def _row_to_response(row: dict) -> TaskResponse:
@@ -36,10 +35,14 @@ def _row_to_response(row: dict) -> TaskResponse:
 
 
 @router.get("", response_model=List[TaskResponse])
-async def get_tasks(status: Optional[str] = Query(None, description="Filter by status: today, done, or backlog")):
+async def get_tasks(
+    status: Optional[str] = Query(None, description="Filter by status: today, done, or backlog"),
+    current_user: str = Depends(get_current_user),
+    db: Client = Depends(get_db),
+):
     # Select task fields plus related table names
     query_str = "*, projects(name), subjects(name), subtopics(name), platforms(name)"
-    query = supabase.table("tasks").select(query_str).eq("user_id", USER_ID)
+    query = db.table("tasks").select(query_str).eq("user_id", current_user)
 
     if status:
         if status not in ["today", "done", "backlog"]:
@@ -55,14 +58,17 @@ async def get_tasks(status: Optional[str] = Query(None, description="Filter by s
 
 
 @router.post("", response_model=TaskResponse, status_code=201)
-async def create_task(task: TaskCreate):
+async def create_task(task: TaskCreate, current_user: str = Depends(get_current_user), db: Client = Depends(get_db)):
+    import logging
+    logger = logging.getLogger("tasks.create")
+
     now = datetime.now()
     data = {
-        "user_id": USER_ID,
+        "user_id": current_user,
         "title": task.title,
         "task_type": task.task_type,
         "priority": task.priority,
-        "deadline": task.deadline,
+        "deadline": str(task.deadline) if task.deadline else None,
         "status": task.status,
         "project_id": str(task.project_id) if task.project_id else None,
         "subject_id": str(task.subject_id) if task.subject_id else None,
@@ -72,17 +78,26 @@ async def create_task(task: TaskCreate):
         "created_at": now.isoformat(),
     }
 
+    # TEMPORARY DEBUG: Log auth context (never log tokens)
+    logger.info(f"[DEBUG] create_task: user_id={current_user}, scoped_client={db is not None}")
+
     try:
-        result = supabase.table("tasks").insert(data).execute()
+        result = db.table("tasks").insert(data).execute()
     except APIError as e:
+        logger.error(f"[DEBUG] create_task APIError: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
     return _row_to_response(result.data[0])
 
 
 @router.patch("/{task_id}", response_model=TaskResponse)
-async def update_task(task_id: UUID, task_update: TaskUpdate):
-    existing = supabase.table("tasks").select("*").eq("id", str(task_id)).eq("user_id", USER_ID).execute()
+async def update_task(
+    task_id: UUID, 
+    task_update: TaskUpdate, 
+    current_user: str = Depends(get_current_user),
+    db: Client = Depends(get_db),
+):
+    existing = db.table("tasks").select("*").eq("id", str(task_id)).eq("user_id", current_user).execute()
     if not existing.data:
         raise HTTPException(status_code=404, detail="Task not found")
 
@@ -96,7 +111,7 @@ async def update_task(task_id: UUID, task_update: TaskUpdate):
     if task_update.priority is not None:
         update_data["priority"] = task_update.priority
     if task_update.deadline is not None:
-        update_data["deadline"] = task_update.deadline
+        update_data["deadline"] = str(task_update.deadline)
     if task_update.status is not None:
         if task_update.status == "done" and current["status"] != "done":
             update_data["completed_at"] = datetime.now().isoformat()
@@ -122,20 +137,20 @@ async def update_task(task_id: UUID, task_update: TaskUpdate):
         raise HTTPException(status_code=400, detail="No fields to update")
 
     try:
-        supabase.table("tasks").update(update_data).eq("id", str(task_id)).eq("user_id", USER_ID).execute()
+        db.table("tasks").update(update_data).eq("id", str(task_id)).eq("user_id", current_user).execute()
     except APIError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
     # Re-fetch with joins to include related names in response
     query_str = "*, projects(name), subjects(name), subtopics(name), platforms(name)"
-    result = supabase.table("tasks").select(query_str).eq("id", str(task_id)).eq("user_id", USER_ID).execute()
+    result = db.table("tasks").select(query_str).eq("id", str(task_id)).eq("user_id", current_user).execute()
     return _row_to_response(result.data[0])
 
 
 @router.delete("/{task_id}")
-async def delete_task(task_id: UUID):
+async def delete_task(task_id: UUID, current_user: str = Depends(get_current_user), db: Client = Depends(get_db)):
     try:
-        supabase.table("tasks").delete().eq("id", str(task_id)).eq("user_id", USER_ID).execute()
+        db.table("tasks").delete().eq("id", str(task_id)).eq("user_id", current_user).execute()
     except APIError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -143,15 +158,15 @@ async def delete_task(task_id: UUID):
 
 
 @router.post("/run-backlog-check")
-async def run_backlog_check():
+async def run_backlog_check(current_user: str = Depends(get_current_user), db: Client = Depends(get_db)):
     try:
-        result = supabase.table("tasks")\
+        result = db.table("tasks")\
             .update({
                 "status": "backlog",
                 "moved_to_backlog_at": datetime.now().isoformat()
             })\
             .eq("status", "today")\
-            .eq("user_id", USER_ID)\
+            .eq("user_id", current_user)\
             .execute()
     except APIError as e:
         raise HTTPException(status_code=400, detail=str(e))

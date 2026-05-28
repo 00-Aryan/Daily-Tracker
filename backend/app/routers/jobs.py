@@ -1,11 +1,12 @@
 from datetime import date, datetime, timedelta
 from uuid import UUID
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from typing import Optional, List
 from postgrest.exceptions import APIError
+from supabase import Client
 
-from app.database import supabase
 from app.schemas.job import JobCreate, JobUpdate, JobResponse, ResumeStats
+from app.dependencies import get_current_user, get_db
 
 router = APIRouter()
 
@@ -28,8 +29,12 @@ def _row_to_job(row: dict) -> JobResponse:
 
 
 @router.get("", response_model=List[JobResponse])
-async def get_jobs(status: Optional[str] = Query(None)):
-    query = supabase.table("job_applications").select("*").order("date_applied", desc=True)
+async def get_jobs(
+    status: Optional[str] = Query(None),
+    current_user: str = Depends(get_current_user),
+    db: Client = Depends(get_db),
+):
+    query = db.table("job_applications").select("*").eq("user_id", current_user).order("date_applied", desc=True)
     if status:
         query = query.eq("status", status)
     result = query.execute()
@@ -37,9 +42,10 @@ async def get_jobs(status: Optional[str] = Query(None)):
 
 
 @router.post("", response_model=JobResponse, status_code=201)
-async def create_job(job: JobCreate):
+async def create_job(job: JobCreate, current_user: str = Depends(get_current_user), db: Client = Depends(get_db)):
     now = datetime.now()
     data = {
+        "user_id": current_user,
         "company_name": job.company_name,
         "role": job.role,
         "jd_link": job.jd_link,
@@ -53,15 +59,20 @@ async def create_job(job: JobCreate):
         "updated_at": now.isoformat(),
     }
     try:
-        result = supabase.table("job_applications").insert(data).execute()
+        result = db.table("job_applications").insert(data).execute()
     except APIError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return _row_to_job(result.data[0])
 
 
 @router.patch("/{job_id}", response_model=JobResponse)
-async def update_job(job_id: UUID, job_update: JobUpdate):
-    existing = supabase.table("job_applications").select("*").eq("id", str(job_id)).execute()
+async def update_job(
+    job_id: UUID, 
+    job_update: JobUpdate, 
+    current_user: str = Depends(get_current_user),
+    db: Client = Depends(get_db),
+):
+    existing = db.table("job_applications").select("*").eq("id", str(job_id)).eq("user_id", current_user).execute()
     if not existing.data:
         raise HTTPException(status_code=404, detail="Job not found")
 
@@ -87,7 +98,7 @@ async def update_job(job_id: UUID, job_update: JobUpdate):
         update_data["follow_up_sent"] = job_update.follow_up_sent
 
     try:
-        result = supabase.table("job_applications").update(update_data).eq("id", str(job_id)).execute()
+        result = db.table("job_applications").update(update_data).eq("id", str(job_id)).eq("user_id", current_user).execute()
     except APIError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -95,9 +106,9 @@ async def update_job(job_id: UUID, job_update: JobUpdate):
 
 
 @router.delete("/{job_id}")
-async def delete_job(job_id: UUID):
+async def delete_job(job_id: UUID, current_user: str = Depends(get_current_user), db: Client = Depends(get_db)):
     try:
-        result = supabase.table("job_applications").delete().eq("id", str(job_id)).execute()
+        result = db.table("job_applications").delete().eq("id", str(job_id)).eq("user_id", current_user).execute()
     except APIError as e:
         raise HTTPException(status_code=400, detail=str(e))
     if result.data == []:
@@ -106,8 +117,8 @@ async def delete_job(job_id: UUID):
 
 
 @router.get("/stats")
-async def get_job_stats():
-    all_jobs = supabase.table("job_applications").select("*").execute()
+async def get_job_stats(current_user: str = Depends(get_current_user), db: Client = Depends(get_db)):
+    all_jobs = db.table("job_applications").select("*").eq("user_id", current_user).execute()
     jobs = all_jobs.data
 
     total = len(jobs)
@@ -144,7 +155,14 @@ async def get_job_stats():
 
 
 @router.get("/followup", response_model=List[JobResponse])
-async def get_followup_jobs():
+async def get_followup_jobs(current_user: str = Depends(get_current_user), db: Client = Depends(get_db)):
     cutoff = (date.today() - timedelta(days=7)).isoformat()
-    result = supabase.table("job_applications").select("*").eq("status", "Applied").eq("follow_up_sent", False).lte("date_applied", cutoff).order("date_applied", desc=True).execute()
+    result = db.table("job_applications")\
+        .select("*")\
+        .eq("user_id", current_user)\
+        .eq("status", "Applied")\
+        .eq("follow_up_sent", False)\
+        .lte("date_applied", cutoff)\
+        .order("date_applied", desc=True)\
+        .execute()
     return [_row_to_job(r) for r in result.data]

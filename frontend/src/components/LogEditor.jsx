@@ -77,7 +77,7 @@ export default function LogEditor({ date, existingLog, onSaved, onDirtyChange })
     <form onSubmit={handleSave} className="space-y-4">
       {error && (
         <div className="p-3 bg-red-50 text-red-700 rounded-md text-sm">
-          {typeof error === 'string' ? error : JSON.stringify(error)}
+          {error?.message || String(error) || 'Unknown error'}
         </div>
       )}
 

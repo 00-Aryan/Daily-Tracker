@@ -1,107 +1,124 @@
 import axios from 'axios';
+import { supabase } from './supabaseClient';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000',
 });
 
+// Request interceptor for attaching auth token
+api.interceptors.request.use(async (config) => {
+  if (supabase) {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.access_token) {
+      config.headers.Authorization = `Bearer ${session.access_token}`;
+    }
+  }
+  return config;
+}, (error) => {
+  return Promise.reject(error);
+});
+
 // ==================== Tasks ====================
 
-export const getTasks = (status) => 
-  api.get('/tasks', { params: status ? { status } : {} });
+export const getTasks = (status, config = {}) =>
+  api.get('/tasks', { params: status ? { status } : {}, ...config });
 
-export const createTask = (data) => 
-  api.post('/tasks', data);
+export const createTask = (data, config = {}) =>
+  api.post('/tasks', data, config);
 
-export const updateTask = (id, data) => 
-  api.patch(`/tasks/${id}`, data);
+export const updateTask = (id, data, config = {}) =>
+  api.patch(`/tasks/${id}`, data, config);
 
-export const deleteTask = (id) => 
-  api.delete(`/tasks/${id}`);
+export const deleteTask = (id, config = {}) =>
+  api.delete(`/tasks/${id}`, config);
 
 // ==================== Reference Data ====================
 
-export const getSubjects = () => 
-  api.get('/reference/subjects');
+export const getSubjects = (config = {}) =>
+  api.get('/reference/subjects', config);
 
-export const getSubtopics = (subjectId) => 
-  api.get('/reference/subtopics', { params: { subject_id: subjectId } });
+export const getSubtopics = (subjectId, config = {}) =>
+  api.get('/reference/subtopics', { params: { subject_id: subjectId }, ...config });
 
-export const getPlatforms = () => 
-  api.get('/reference/platforms');
+export const getPlatforms = (config = {}) =>
+  api.get('/reference/platforms', config);
 
-export const getProjects = () => 
-  api.get('/reference/projects');
+export const getProjects = (config = {}) =>
+  api.get('/reference/projects', config);
 
-export const createSubject = (data) =>
-  api.post('/reference/subjects', data);
+export const createSubject = (data, config = {}) =>
+  api.post('/reference/subjects', data, config);
 
-export const createSubtopic = (data) =>
-  api.post('/reference/subtopics', data);
+export const createSubtopic = (data, config = {}) =>
+  api.post('/reference/subtopics', data, config);
 
-export const createPlatform = (data) =>
-  api.post('/reference/platforms', data);
+export const createPlatform = (data, config = {}) =>
+  api.post('/reference/platforms', data, config);
 
-export const createProject = (data) =>
-  api.post('/reference/projects', data);
+export const createProject = (data, config = {}) =>
+  api.post('/reference/projects', data, config);
 
 // ==================== Daily Logs ====================
 
-export const getLog = (date) =>
-  api.get(`/logs/${date}`);
+export const getLog = (date, config = {}) =>
+  api.get(`/logs/${date}`, config);
 
-export const getLogs = (page = 1, limit = 10) =>
-  api.get('/logs', { params: { page, limit } });
+export const getLogs = (page = 1, limit = 10, config = {}) =>
+  api.get('/logs', { params: { page, limit }, ...config });
 
-export const createLog = (data) =>
-  api.post('/logs', data);
+export const createLog = (data, config = {}) =>
+  api.post('/logs', data, config);
 
-export const updateLog = (date, data) =>
-  api.patch(`/logs/${date}`, data);
+export const updateLog = (date, data, config = {}) =>
+  api.patch(`/logs/${date}`, data, config);
 
-export const searchLogs = (query) =>
-  api.get('/logs/search', { params: { q: query } });
+export const searchLogs = (query, config = {}) =>
+  api.get('/logs/search', { params: { q: query }, ...config });
 
 // ==================== Jobs ====================
 
-export const getJobs = (status) =>
-  api.get('/jobs', { params: status ? { status } : {} });
+export const getJobs = (status, config = {}) =>
+  api.get('/jobs', { params: status ? { status } : {}, ...config });
 
-export const createJob = (data) =>
-  api.post('/jobs', data);
+export const createJob = (data, config = {}) =>
+  api.post('/jobs', data, config);
 
-export const updateJob = (id, data) =>
-  api.patch(`/jobs/${id}`, data);
+export const updateJob = (id, data, config = {}) =>
+  api.patch(`/jobs/${id}`, data, config);
 
-export const deleteJob = (id) =>
-  api.delete(`/jobs/${id}`);
+export const deleteJob = (id, config = {}) =>
+  api.delete(`/jobs/${id}`, config);
 
-export const getJobStats = () =>
-  api.get('/jobs/stats');
+export const getJobStats = (config = {}) =>
+  api.get('/jobs/stats', config);
 
-export const getFollowUps = () =>
-  api.get('/jobs/followup');
+export const getFollowUps = (config = {}) =>
+  api.get('/jobs/followup', config);
 
 // ==================== Study ====================
 
-export const getStudyProfile = () =>
-  api.get('/study/profile');
+export const getStudyProfile = (config = {}) =>
+  api.get('/study/profile', config);
 
-export const createStudyProfile = (data) =>
-  api.post('/study/profile', data);
+export const createStudyProfile = (data, config = {}) =>
+  api.post('/study/profile', data, config);
 
-export const generateQuestions = (subjectId, subtopicId) =>
-  api.get('/study/questions/generate', { params: { subject_id: subjectId, subtopic_id: subtopicId } });
+export const generateQuestions = (subjectId, subtopicId, config = {}) =>
+  api.get('/study/questions/generate', {
+    params: { subject_id: subjectId, subtopic_id: subtopicId },
+    ...config,
+  });
 
-export const submitAttempt = (data) =>
-  api.post('/study/attempts', data);
+export const submitAttempt = (data, config = {}) =>
+  api.post('/study/attempts', data, config);
 
-export const getTopicLevels = () =>
-  api.get('/study/levels');
+export const getTopicLevels = (config = {}) =>
+  api.get('/study/levels', config);
 
-export const getStudyStats = () =>
-  api.get('/study/stats');
+export const getStudyStats = (config = {}) =>
+  api.get('/study/stats', config);
 
-export const getDueToday = () =>
-  api.get('/study/due-today');
+export const getDueToday = (config = {}) =>
+  api.get('/study/due-today', config);
 
 export default api;

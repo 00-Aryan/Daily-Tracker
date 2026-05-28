@@ -7,13 +7,14 @@ import {
   createSubject,
   createSubtopic,
 } from '../services/api';
+import { isAbortError } from '../services/asyncUtils';
 import OnboardingFlow from '../components/study/OnboardingFlow';
 import QuestionSession from '../components/study/QuestionSession';
 import ProgressDashboard from '../components/study/ProgressDashboard';
 import DueTodayPanel from '../components/study/DueTodayPanel';
 
 export default function StudyQA() {
-  const [profile, setProfile] = useState(undefined); // undefined=loading, null=no profile
+  const [profile, setProfile] = useState(undefined);
   const [subjects, setSubjects] = useState([]);
   const [subtopics, setSubtopics] = useState([]);
   const [selectedSubject, setSelectedSubject] = useState('');
@@ -22,60 +23,109 @@ export default function StudyQA() {
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
-    getStudyProfile()
-      .then(res => setProfile(res.data))
-      .catch(() => setProfile(null));
-    getSubjects()
-      .then(res => setSubjects(res.data || []))
-      .catch(() => {});
+    const controller = new AbortController();
+    let active = true;
+
+    const loadProfile = async () => {
+      try {
+        const res = await getStudyProfile({ signal: controller.signal });
+        if (!active) return;
+        setProfile(res.data);
+      } catch (err) {
+        if (!active || isAbortError(err)) return;
+        setProfile(null);
+      }
+    };
+
+    const loadSubjects = async () => {
+      try {
+        const res = await getSubjects({ signal: controller.signal });
+        if (!active) return;
+        setSubjects(res.data || []);
+      } catch (err) {
+        if (!active || isAbortError(err)) return;
+        setSubjects([]);
+      }
+    };
+
+    loadProfile();
+    loadSubjects();
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
   }, []);
 
   useEffect(() => {
-    if (selectedSubject) {
-      getSubtopics(selectedSubject)
-        .then(res => setSubtopics(res.data || []))
-        .catch(() => setSubtopics([]));
-    } else {
+    if (!selectedSubject) {
       setSubtopics([]);
       setSelectedSubtopic('');
+      return;
     }
+
+    const controller = new AbortController();
+    let active = true;
+
+    const loadSubtopics = async () => {
+      try {
+        const res = await getSubtopics(selectedSubject, { signal: controller.signal });
+        if (!active) return;
+        setSubtopics(res.data || []);
+      } catch (err) {
+        if (!active || isAbortError(err)) return;
+        setSubtopics([]);
+      }
+    };
+
+    loadSubtopics();
+    return () => {
+      active = false;
+      controller.abort();
+    };
   }, [selectedSubject]);
 
-  // Loading state
   if (profile === undefined) {
     return <div className="text-center py-12 text-gray-500">Loading...</div>;
   }
 
-  // Onboarding
   if (!profile) {
     return <OnboardingFlow onComplete={() => {
-      getStudyProfile().then(res => setProfile(res.data)).catch(() => {});
+      getStudyProfile().then((res) => setProfile(res.data)).catch(() => {});
     }} />;
   }
 
   const handleSessionComplete = () => {
     setSessionActive(false);
-    setRefreshKey(prev => prev + 1);
+    setRefreshKey((prev) => prev + 1);
   };
 
   const handleCreateSubject = async (name) => {
-    const res = await createSubject({ name });
-    const subjectsRes = await getSubjects();
-    setSubjects(subjectsRes.data || []);
-    setSelectedSubject(res.data.id);
-    setSelectedSubtopic('');
+    try {
+      const res = await createSubject({ name });
+      const subjectsRes = await getSubjects();
+      setSubjects(subjectsRes.data || []);
+      setSelectedSubject(res.data.id);
+      setSelectedSubtopic('');
+    } catch (err) {
+      console.error('Failed to create subject', err);
+    }
   };
 
   const handleCreateSubtopic = async (name) => {
-    const res = await createSubtopic({ subject_id: selectedSubject, name });
-    const subtopicsRes = await getSubtopics(selectedSubject);
-    setSubtopics(subtopicsRes.data || []);
-    setSelectedSubtopic(res.data.id);
+    try {
+      const res = await createSubtopic({ subject_id: selectedSubject, name });
+      const subtopicsRes = await getSubtopics(selectedSubject);
+      setSubtopics(subtopicsRes.data || []);
+      setSelectedSubtopic(res.data.id);
+    } catch (err) {
+      console.error('Failed to create subtopic', err);
+    }
   };
 
   return (
     <div>
-      <DueTodayPanel onStartReview={() => setSessionActive(true)} />
+      <DueTodayPanel key={refreshKey} onStartReview={() => setSessionActive(true)} />
 
       {sessionActive ? (
         <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
@@ -87,7 +137,6 @@ export default function StudyQA() {
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left: Session Starter */}
           <div className="lg:col-span-2">
             <div className="bg-white border border-gray-200 rounded-lg p-5 shadow-sm">
               <h2 className="font-semibold mb-4">Start a Study Session</h2>
@@ -130,7 +179,6 @@ export default function StudyQA() {
             </div>
           </div>
 
-          {/* Right: Progress */}
           <div key={refreshKey}>
             <ProgressDashboard />
           </div>

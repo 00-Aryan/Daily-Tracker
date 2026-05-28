@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import AddJobModal from '../components/AddJobModal';
 import JobCard from '../components/JobCard';
 import {
@@ -8,6 +8,7 @@ import {
   updateJob,
   deleteJob,
 } from '../services/api';
+import { hasSettledFailure, isAbortError } from '../services/asyncUtils';
 
 const STATUSES = ['Applied', 'Screening', 'Interview', 'Offer', 'Rejected'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -25,32 +26,67 @@ export default function JobTracker() {
   const [showModal, setShowModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [partialError, setPartialError] = useState('');
 
-  const loadData = async () => {
+  const loadData = useCallback(async (signal) => {
     setError('');
-    try {
-      const [jobsRes, statsRes, followUpsRes] = await Promise.all([
-        getJobs(),
-        getJobStats(),
-        getFollowUps(),
-      ]);
-      setJobs(jobsRes.data || []);
-      setStats(statsRes.data || null);
-      setFollowUps(followUpsRes.data || []);
-    } catch (err) {
-      setError('Failed to load job data');
-      console.error(err);
+    setPartialError('');
+
+    const results = await Promise.allSettled([
+      getJobs(undefined, { signal }),
+      getJobStats({ signal }),
+      getFollowUps({ signal }),
+    ]);
+
+    if (signal?.aborted) return;
+
+    const [jobsResult, statsResult, followUpsResult] = results;
+
+    if (jobsResult.status === 'fulfilled') {
+      setJobs(jobsResult.value.data || []);
+    } else if (!isAbortError(jobsResult.reason)) {
+      setJobs([]);
+      setError('Failed to load applications');
     }
-  };
+
+    if (statsResult.status === 'fulfilled') {
+      setStats(statsResult.value.data || null);
+    } else if (!isAbortError(statsResult.reason)) {
+      setStats(null);
+    }
+
+    if (followUpsResult.status === 'fulfilled') {
+      setFollowUps(followUpsResult.value.data || []);
+    } else if (!isAbortError(followUpsResult.reason)) {
+      setFollowUps([]);
+    }
+
+    const jobsOk = jobsResult.status === 'fulfilled';
+    const statsOk = statsResult.status === 'fulfilled';
+    const followUpsOk = followUpsResult.status === 'fulfilled';
+
+    if (jobsOk && (!statsOk || !followUpsOk) && hasSettledFailure(results)) {
+      const failed = [];
+      if (!statsOk) failed.push('stats');
+      if (!followUpsOk) failed.push('follow-ups');
+      setPartialError(`Some sections failed to load (${failed.join(', ')}).`);
+    }
+  }, []);
 
   useEffect(() => {
+    const controller = new AbortController();
+
     const init = async () => {
       setLoading(true);
-      await loadData();
-      setLoading(false);
+      await loadData(controller.signal);
+      if (!controller.signal.aborted) {
+        setLoading(false);
+      }
     };
+
     init();
-  }, []);
+    return () => controller.abort();
+  }, [loadData]);
 
   const filteredJobs = useMemo(() => {
     let list = [...jobs];
@@ -110,6 +146,11 @@ export default function JobTracker() {
       {error && (
         <div className="p-3 bg-red-50 text-red-700 rounded-lg text-sm border border-red-200">
           {error}
+        </div>
+      )}
+      {!error && partialError && (
+        <div className="p-3 bg-amber-50 text-amber-800 rounded-lg text-sm border border-amber-200">
+          {partialError}
         </div>
       )}
 

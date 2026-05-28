@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { getLogs, searchLogs } from '../services/api';
+import { isAbortError } from '../services/asyncUtils';
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const MONTHS = [
@@ -35,31 +36,41 @@ export default function LogJournal({ searchQuery, onDateSelect }) {
   }, [searchQuery]);
 
   useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
+
     const fetchLogs = async () => {
       setLoading(true);
       setError('');
       try {
         if (isSearch) {
-          const res = await searchLogs(searchQuery.trim());
+          const res = await searchLogs(searchQuery.trim(), { signal: controller.signal });
+          if (!active) return;
           const data = res.data || [];
           setLogs(data);
           setHasMore(false);
         } else {
-          const res = await getLogs(1, 10);
+          const res = await getLogs(1, 10, { signal: controller.signal });
+          if (!active) return;
           const data = res.data || [];
           setLogs(data);
           setHasMore(data.length === 10);
           setPage(1);
         }
       } catch (err) {
+        if (!active || isAbortError(err)) return;
         setError('Failed to load logs');
         console.error(err);
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     };
 
     fetchLogs();
+    return () => {
+      active = false;
+      controller.abort();
+    };
   }, [searchQuery, isSearch]);
 
   const handleLoadMore = async () => {
@@ -71,7 +82,13 @@ export default function LogJournal({ searchQuery, onDateSelect }) {
     try {
       const res = await getLogs(nextPage, 10);
       const data = res.data || [];
-      setLogs((prev) => [...prev, ...data]);
+      setLogs((prev) => {
+        const combined = [...prev, ...data];
+        const unique = [
+          ...new Map(combined.map((l) => [l.id, l])).values(),
+        ];
+        return unique;
+      });
       setPage(nextPage);
       setHasMore(data.length === 10);
     } catch (err) {
@@ -87,7 +104,7 @@ export default function LogJournal({ searchQuery, onDateSelect }) {
   }
 
   return (
-    <div>
+    <div className="flex flex-col h-full">
       {error && (
         <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-md text-sm">{error}</div>
       )}
@@ -95,7 +112,7 @@ export default function LogJournal({ searchQuery, onDateSelect }) {
       {logs.length === 0 ? (
         <p className="text-center text-gray-500 py-8">No logs yet</p>
       ) : (
-        <div className="space-y-3 max-h-[calc(100vh-220px)] overflow-y-auto pr-1">
+        <div className="space-y-3 flex-1 overflow-y-auto pr-1">
           {logs.map((log) => (
             <div
               key={log.id}

@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import LogEditor from '../components/LogEditor';
 import LogJournal from '../components/LogJournal';
-import { getLog, getTasks } from '../services/api';
+import { getLog } from '../services/api';
+import { isAbortError } from '../services/asyncUtils';
+import useAppStore from '../store/useAppStore';
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const MONTHS = [
@@ -32,6 +34,12 @@ function formatDisplayDate(dateStr) {
 }
 
 export default function DailyLog() {
+  const tasks = useAppStore((state) => state.tasks);
+  const fetchTasks = useAppStore((state) => state.fetchTasks);
+  const tasksLoading = useAppStore((state) => state.tasksLoading);
+  const tasksError = useAppStore((state) => state.tasksError);
+  const updateTaskStatus = useAppStore((state) => state.updateTaskStatus);
+
   const today = getTodayISO();
   const [selectedDate, setSelectedDate] = useState(today);
   const [currentLog, setCurrentLog] = useState(null);
@@ -40,54 +48,51 @@ export default function DailyLog() {
   const [searchInput, setSearchInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [todayTasks, setTodayTasks] = useState([]);
-  const [tasksLoading, setTasksLoading] = useState(false);
-  const [tasksError, setTasksError] = useState('');
   const [logDirty, setLogDirty] = useState(false);
-
-  const loadLogForDate = useCallback(async (date) => {
-    setLoading(true);
-    setError('');
-    try {
-      const res = await getLog(date);
-      setCurrentLog(res.data);
-    } catch (err) {
-      if (err.response?.status === 404) {
-        setCurrentLog(null);
-      } else {
-        setError('Failed to load log');
-        console.error(err);
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (view === 'editor') {
-      loadLogForDate(selectedDate);
-    }
-  }, [selectedDate, view, loadLogForDate]);
 
   useEffect(() => {
     if (view !== 'editor') return;
 
-    const loadTasks = async () => {
-      setTasksLoading(true);
-      setTasksError('');
+    const controller = new AbortController();
+    let active = true;
+
+    const loadLog = async () => {
+      setLoading(true);
+      setError('');
       try {
-        const res = await getTasks('today');
-        setTodayTasks(res.data || []);
+        const res = await getLog(selectedDate, { signal: controller.signal });
+        if (!active) return;
+        setCurrentLog(res.data);
       } catch (err) {
-        setTasksError('Failed to load tasks');
-        console.error(err);
+        if (!active || isAbortError(err)) return;
+        if (err.response?.status === 404) {
+          setCurrentLog(null);
+        } else {
+          setError('Failed to load log');
+          console.error(err);
+        }
       } finally {
-        setTasksLoading(false);
+        if (active) setLoading(false);
       }
     };
 
-    loadTasks();
-  }, [view]);
+    loadLog();
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [selectedDate, view]);
+
+  useEffect(() => {
+    if (view !== 'editor' || selectedDate !== today) return;
+
+    const controller = new AbortController();
+    fetchTasks(null, { signal: controller.signal });
+
+    return () => {
+      controller.abort();
+    };
+  }, [view, selectedDate, today, fetchTasks]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -96,9 +101,16 @@ export default function DailyLog() {
     return () => clearTimeout(timer);
   }, [searchInput]);
 
-  const handleLogSaved = () => {
-    loadLogForDate(selectedDate);
-  };
+  const handleLogSaved = useCallback(async () => {
+    try {
+      const res = await getLog(selectedDate);
+      setCurrentLog(res.data);
+    } catch (err) {
+      if (err.response?.status === 404) {
+        setCurrentLog(null);
+      }
+    }
+  }, [selectedDate]);
 
   const confirmNavigation = () => {
     if (logDirty) {
@@ -129,6 +141,15 @@ export default function DailyLog() {
     const next = addDays(selectedDate, 1);
     if (next <= today) {
       setSelectedDate(next);
+    }
+  };
+
+  const handleToggleTask = async (taskId, currentStatus) => {
+    const newStatus = currentStatus === 'done' ? 'today' : 'done';
+    try {
+      await updateTaskStatus(taskId, newStatus);
+    } catch (err) {
+      // Error handled by store
     }
   };
 
@@ -199,40 +220,84 @@ export default function DailyLog() {
             </button>
           </div>
 
-          <div className="mb-6 bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
-            <h3 className="text-sm font-semibold text-gray-800 mb-3">Today&apos;s Tasks</h3>
-            {tasksLoading ? (
-              <p className="text-sm text-gray-500">Loading tasks...</p>
-            ) : tasksError ? (
-              <p className="text-sm text-red-600">{tasksError}</p>
-            ) : todayTasks.length === 0 ? (
-              <p className="text-sm text-gray-500">No tasks for today</p>
-            ) : (
-              <ul className="space-y-1">
-                {todayTasks.map((task) => (
-                  <li key={task.id} className="text-sm text-gray-700 flex items-center gap-2">
-                    <span className={task.status === 'done' ? 'text-green-600' : 'text-gray-300'}>
-                      {task.status === 'done' ? '✓' : '○'}
-                    </span>
-                    <span className={task.status === 'done' ? 'line-through text-gray-400' : ''}>
-                      {task.title}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div>
+              {selectedDate === today ? (
+                <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm h-fit">
+                  <h3 className="text-sm font-semibold text-gray-800 mb-3">Today&apos;s Tasks</h3>
+                  {tasksLoading && tasks.today.length === 0 ? (
+                    <p className="text-sm text-gray-500">Loading tasks...</p>
+                  ) : tasksError ? (
+                    <p className="text-sm text-red-600">{tasksError}</p>
+                  ) : (
+                    <div className="space-y-4">
+                      <div>
+                        {tasks.today.length === 0 ? (
+                          <p className="text-sm text-gray-500">No active tasks</p>
+                        ) : (
+                          <ul className="space-y-1">
+                            {tasks.today.map((task) => (
+                              <li key={task.id} className="text-sm text-gray-700 flex items-center gap-2 group">
+                                <button
+                                  onClick={() => handleToggleTask(task.id, 'today')}
+                                  className="text-gray-300 hover:text-blue-500 transition-colors"
+                                  title="Mark as done"
+                                >
+                                  ○
+                                </button>
+                                <span>{task.title}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
 
-          {loading ? (
-            <div className="text-center text-gray-500 py-8">Loading log...</div>
-          ) : (
-            <LogEditor
-              date={selectedDate}
-              existingLog={currentLog}
-              onSaved={handleLogSaved}
-              onDirtyChange={setLogDirty}
-            />
-          )}
+                      <div>
+                        <h4 className="text-xs font-semibold text-stone-400 uppercase tracking-wider mb-2">Completed</h4>
+                        {tasks.done.length === 0 ? (
+                          <p className="text-sm text-gray-400">None</p>
+                        ) : (
+                          <ul className="space-y-1">
+                            {tasks.done.map((task) => (
+                              <li key={task.id} className="text-sm text-stone-400 flex items-center gap-2 group">
+                                <button
+                                  onClick={() => handleToggleTask(task.id, 'done')}
+                                  className="text-blue-500 hover:text-gray-400 transition-colors"
+                                  title="Move back to today"
+                                >
+                                  ✓
+                                </button>
+                                <span className="line-through">{task.title}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="bg-white rounded-xl border border-[#E7E5E4] p-4 text-center">
+                  <p className="text-xs text-stone-400">
+                    Task history not available for past dates
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div>
+              {loading ? (
+                <div className="text-center text-gray-500 py-8">Loading log...</div>
+              ) : (
+                <LogEditor
+                  date={selectedDate}
+                  existingLog={currentLog}
+                  onSaved={handleLogSaved}
+                  onDirtyChange={setLogDirty}
+                />
+              )}
+            </div>
+          </div>
         </div>
       )}
 

@@ -6,6 +6,9 @@ import Tasks from './pages/Tasks';
 import DailyLog from './pages/DailyLog';
 import StudyQA from './pages/StudyQA';
 import JobTracker from './pages/JobTracker';
+import Login from './pages/Login';
+import Signup from './pages/Signup';
+import ProtectedRoute from './components/ProtectedRoute';
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -66,29 +69,37 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
         <Route path="/" element={<Navigate to="/tasks" replace />} />
-        <Route element={<Layout />}>
+        
+        <Route element={
+          <ProtectedRoute>
+            <Layout />
+          </ProtectedRoute>
+        }>
           <Route path="/tasks" element={<Tasks />} />
           <Route path="/daily-log" element={<DailyLog />} />
           <Route path="/study" element={<StudyQA />} />
           <Route path="/jobs" element={<JobTracker />} />
-          <Route path="*" element={
-            <div className="flex flex-col items-center justify-center
-                            h-full py-24 text-center">
-              <p className="text-6xl mb-4">🧭</p>
-              <h2 className="text-lg font-semibold text-stone-700 mb-2">
-                Page not found
-              </h2>
-              <p className="text-sm text-stone-400 mb-6">
-                This page doesn't exist.
-              </p>
-              <a href="/tasks"
-                 className="text-sm text-[#F97316] hover:underline">
-                ← Back to Tasks
-              </a>
-            </div>
-          } />
         </Route>
+
+        <Route path="*" element={
+          <div className="flex flex-col items-center justify-center
+                          h-full py-24 text-center">
+            <p className="text-6xl mb-4">🧭</p>
+            <h2 className="text-lg font-semibold text-stone-700 mb-2">
+              Page not found
+            </h2>
+            <p className="text-sm text-stone-400 mb-6">
+              This page doesn't exist.
+            </p>
+            <a href="/tasks"
+               className="text-sm text-[#F97316] hover:underline">
+              ← Back to Tasks
+            </a>
+          </div>
+        } />
       </Routes>
     </BrowserRouter>
   );
