@@ -1,15 +1,10 @@
 import axios from 'axios';
 import { supabase } from './supabaseClient';
 import { getCachedToken, setCachedToken } from './tokenCache';
-import { dedup } from './requestDedup';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000',
 });
-
-// Wrap default adapter with GET request deduplication
-const defaultAdapter = api.defaults.adapter;
-api.defaults.adapter = dedup(defaultAdapter);
 
 // Request interceptor for attaching auth token (cached)
 api.interceptors.request.use(async (config) => {
